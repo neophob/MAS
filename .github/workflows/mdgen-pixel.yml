@@ -18,20 +18,57 @@ jobs:
         with:
           lfs: true
 
-      - name: Build pixel-test image
-        run: bash mdgen/scripts/build-pixel-image.sh
-        env:
-          MDGEN_PIXEL_IMAGE: mdgen-pixel:ci
-
       - name: Run pixel test
-        run: bash mdgen/scripts/test-pixel.sh
-        env:
-          MDGEN_PIXEL_IMAGE: mdgen-pixel:ci
-          MDGEN_PIXEL_SKIP_BUILD: "1"
+        working-directory: mdgen
+        run: npm run test:pixel
 
-      - name: Upload generated PDFs and diffs
+      - name: Write workflow summary
+        if: always()
+        run: bash mdgen/scripts/write-github-summary.sh
+
+      - name: Upload generated PDFs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mdgen-output
+          name: mdgen-pdfs
+          path: mdgen/output/*.pdf
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload generated HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mdgen-html
+          path: mdgen/output/*.html
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload pixel report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mdgen-pixel-report
+          path: |
+            mdgen/output/pixel-report.md
+            mdgen/output/pixel-report.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload pixel comparison assets
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mdgen-pixel-assets
+          path: mdgen/output/compare
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload complete mdgen output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mdgen-output-all
           path: mdgen/output
+          if-no-files-found: error
+          retention-days: 14

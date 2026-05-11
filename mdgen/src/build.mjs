@@ -29,7 +29,7 @@ const defaultMeta = {
   advisor: "[Betreuer einfügen]",
   client: "[Auftraggeber einfügen]",
   expert: "[Experte/n einfügen]",
-  date: new Date().toISOString().slice(0, 10),
+  date: "[Datum einfügen]",
   abstractTitle: "Abstract",
   abstract: "",
   thesisLabel: "[Titel der Arbeit, Version, Datum (max. 1 Zeile)]"

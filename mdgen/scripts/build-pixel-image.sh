@@ -7,6 +7,11 @@ ROOT_DIR="$(cd "$MDGEN_DIR/.." && pwd)"
 
 IMAGE_NAME="${MDGEN_PIXEL_IMAGE:-mdgen-pixel:local}"
 PLATFORM="${MDGEN_PIXEL_PLATFORM:-linux/amd64}"
+CACHE_ARGS=(--pull --no-cache)
+
+if [[ "${MDGEN_PIXEL_USE_CACHE:-0}" == "1" ]]; then
+  CACHE_ARGS=()
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker is required to build the mdgen pixel-test image." >&2
@@ -19,6 +24,7 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 docker build \
+  "${CACHE_ARGS[@]}" \
   --platform "$PLATFORM" \
   -f "$MDGEN_DIR/Dockerfile.pixel" \
   -t "$IMAGE_NAME" \

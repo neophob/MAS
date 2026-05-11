@@ -9,7 +9,10 @@ const rootDir = process.env.MDGEN_WORKSPACE
   ? path.resolve(process.env.MDGEN_WORKSPACE)
   : path.resolve(import.meta.dirname, "..", "..");
 const mdgenDir = path.resolve(rootDir, "mdgen");
+const outputDir = path.resolve(mdgenDir, "output");
 const compareDir = path.resolve(mdgenDir, "output", "compare");
+const reportJsonPath = path.resolve(outputDir, "pixel-report.json");
+const reportMarkdownPath = path.resolve(outputDir, "pixel-report.md");
 const templatePdf = path.resolve(rootDir, "template", "Thesisvorlage mit Titelbild1.0.pdf");
 const generatedPdfs = {
   real: path.resolve(mdgenDir, "output", "thesis-real.pdf"),
@@ -117,18 +120,113 @@ async function main() {
 
   for (const result of results) {
     const requiredThreshold = result.threshold ?? threshold;
+    result.requiredThreshold = requiredThreshold;
+    result.passed = result.matchRatio >= requiredThreshold;
     const percent = (result.matchRatio * 100).toFixed(2);
     console.log(`${result.name}: ${percent}% match (${result.differentPixels}/${result.totalPixels} different)`);
     console.log(`diff: ${path.relative(rootDir, result.diffImage)}`);
 
-    if (result.matchRatio < requiredThreshold) {
+    if (!result.passed) {
       failed = true;
     }
   }
 
+  await writePixelReport({ results, failed });
+
   if (failed) {
     throw new Error(`Pixel test failed. Required ${(threshold * 100).toFixed(2)}% match.`);
   }
+}
+
+async function writePixelReport({ results, failed }) {
+  const generatedAt = reportTimestamp();
+  const environment = await collectEnvironment();
+  const report = {
+    status: failed ? "failed" : "passed",
+    generatedAt,
+    environment,
+    threshold,
+    results: results.map((result) => ({
+      name: result.name,
+      matchRatio: result.matchRatio,
+      requiredThreshold: result.requiredThreshold,
+      passed: result.passed,
+      differentPixels: result.differentPixels,
+      totalPixels: result.totalPixels,
+      diffPath: path.relative(outputDir, result.diffImage)
+    }))
+  };
+
+  const lines = [
+    "# mdgen Pixel Report",
+    "",
+    `Status: **${report.status.toUpperCase()}**`,
+    `Generated: \`${generatedAt}\``,
+    "",
+    "Environment:",
+    "",
+    `- Platform: \`${environment.platform}\``,
+    `- Node: \`${environment.node}\``,
+    `- Chromium: \`${environment.chromium}\``,
+    `- Poppler: \`${environment.poppler}\``,
+    `- ImageMagick: \`${environment.imagemagick}\``,
+    "",
+    "| Check | Match | Required | Different pixels | Diff |",
+    "| --- | ---: | ---: | ---: | --- |",
+    ...report.results.map((result) => {
+      const match = `${(result.matchRatio * 100).toFixed(2)}%`;
+      const required = `${(result.requiredThreshold * 100).toFixed(2)}%`;
+      const diff = `[${result.diffPath}](${result.diffPath})`;
+      const status = result.passed ? "PASS" : "FAIL";
+      return `| ${result.name} (${status}) | ${match} | ${required} | ${result.differentPixels}/${result.totalPixels} | ${diff} |`;
+    }),
+    "",
+    "Generated PDFs:",
+    "",
+    "- `thesis-real.pdf`",
+    "- `thesis-dummy.pdf`"
+  ];
+
+  await fs.writeFile(reportJsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await fs.writeFile(reportMarkdownPath, `${lines.join("\n")}\n`, "utf8");
+}
+
+function reportTimestamp() {
+  const epoch = Number.parseInt(process.env.SOURCE_DATE_EPOCH ?? "", 10);
+
+  if (Number.isFinite(epoch)) {
+    return new Date(epoch * 1000).toISOString();
+  }
+
+  return new Date().toISOString();
+}
+
+async function collectEnvironment() {
+  const [platform, node, chromium, poppler, imagemagick] = await Promise.all([
+    commandOutput("uname", ["-m"]),
+    commandOutput("node", ["--version"]),
+    commandOutput("chromium", ["--version"]),
+    commandVersionStderr("pdftoppm", ["-v"]),
+    commandOutput("magick", ["-version"])
+  ]);
+
+  return {
+    platform,
+    node,
+    chromium,
+    poppler: poppler.split(/\r?\n/)[0],
+    imagemagick: imagemagick.split(/\r?\n/)[0]
+  };
+}
+
+async function commandOutput(command, args) {
+  const { stdout } = await execFileAsync(command, args);
+  return stdout.trim();
+}
+
+async function commandVersionStderr(command, args) {
+  const { stderr, stdout } = await execFileAsync(command, args);
+  return (stderr || stdout).trim();
 }
 
 async function assertTool(command) {
