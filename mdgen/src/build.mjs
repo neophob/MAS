@@ -402,6 +402,9 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
       }
 
       .cover-meta {
+        position: absolute;
+        left: 25.3mm;
+        top: 216.9mm;
         width: 143mm;
         border-collapse: collapse;
       }

@@ -65,7 +65,21 @@ const cropChecks = [
     crop: {
       leftPadPt: 4,
       topPadPt: 4,
-      widthPx: 270,
+      widthPx: 760,
+      heightPx: 244
+    },
+    normalize: "posterize-3"
+  },
+  {
+    name: "dummy-cover-date-footer",
+    generatedSet: "dummy",
+    anchorText: "Datum:",
+    templatePageNumber: 1,
+    generatedPageNumber: 1,
+    crop: {
+      leftPadPt: 4,
+      topPadPt: 4,
+      widthPx: 760,
       heightPx: 244
     },
     normalize: "posterize-3"
