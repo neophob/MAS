@@ -8,16 +8,13 @@ on:
       - master
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   pixel-test:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           lfs: true
 
@@ -31,7 +28,7 @@ jobs:
 
       - name: Upload generated PDFs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mdgen-pdfs
           path: mdgen/output/*.pdf
@@ -40,7 +37,7 @@ jobs:
 
       - name: Upload generated HTML
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mdgen-html
           path: mdgen/output/*.html
@@ -49,7 +46,7 @@ jobs:
 
       - name: Upload pixel report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mdgen-pixel-report
           path: |
@@ -60,7 +57,7 @@ jobs:
 
       - name: Upload pixel comparison assets
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mdgen-pixel-assets
           path: mdgen/output/compare
@@ -69,7 +66,7 @@ jobs:
 
       - name: Upload complete mdgen output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mdgen-output-all
           path: mdgen/output
