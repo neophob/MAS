@@ -5,54 +5,123 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-const rootDir = path.resolve(import.meta.dirname, "..", "..");
+const rootDir = process.env.MDGEN_WORKSPACE
+  ? path.resolve(process.env.MDGEN_WORKSPACE)
+  : path.resolve(import.meta.dirname, "..", "..");
 const mdgenDir = path.resolve(rootDir, "mdgen");
 const compareDir = path.resolve(mdgenDir, "output", "compare");
 const templatePdf = path.resolve(rootDir, "template", "Thesisvorlage mit Titelbild1.0.pdf");
-const generatedPdf = path.resolve(mdgenDir, "output", "thesis-real.pdf");
+const generatedPdfs = {
+  real: path.resolve(mdgenDir, "output", "thesis-real.pdf"),
+  dummy: path.resolve(mdgenDir, "output", "thesis-dummy.pdf")
+};
 const threshold = Number.parseFloat(process.env.PIXEL_THRESHOLD ?? "0.95");
+const rasterDpi = 144;
+const pointsToPixels = rasterDpi / 72;
 
 const pageChecks = [
-  { name: "cover", template: "page-01.png", generated: "page-1.png" },
-  { name: "toc", template: "page-03.png", generated: "page-3.png" },
-  { name: "chapter", template: "page-04.png", generated: "page-4.png" }
+  { name: "cover", generatedSet: "real", templatePage: 1, generatedPage: 1 },
+  { name: "toc", generatedSet: "real", templatePage: 3, generatedPage: 3 },
+  { name: "chapter", generatedSet: "real", templatePage: 4, generatedPage: 4 }
+];
+
+const cropChecks = [
+  {
+    name: "table",
+    generatedSet: "dummy",
+    anchorText: "Tabellenkopf",
+    crop: {
+      leftPadPt: 8,
+      topPadPt: 5,
+      widthPx: 960,
+      heightPx: 196
+    },
+    normalize: "posterize-3",
+    threshold: 0.94
+  },
+  {
+    name: "heading-2-1",
+    generatedSet: "dummy",
+    anchorText: "2.1",
+    templatePageNumber: 5,
+    generatedPageNumber: 4,
+    crop: {
+      leftPadPt: 2,
+      topPadPt: 4,
+      widthPx: 180,
+      heightPx: 34
+    },
+    normalize: "binary-dilate-2"
+  },
+  {
+    name: "cover-date-footer",
+    generatedSet: "real",
+    anchorText: "Datum:",
+    templatePageNumber: 1,
+    generatedPageNumber: 1,
+    crop: {
+      leftPadPt: 4,
+      topPadPt: 4,
+      widthPx: 270,
+      heightPx: 244
+    },
+    normalize: "posterize-3"
+  }
 ];
 
 async function main() {
   await assertTool("pdftoppm");
+  await assertTool("pdftotext");
+  await assertTool("pdffonts");
   await assertTool("compare");
   await assertTool("identify");
+  await assertTool("magick");
   await fs.mkdir(compareDir, { recursive: true });
 
-  const templateDir = path.resolve(compareDir, "template");
-  const generatedDir = path.resolve(compareDir, "real");
+  await assertGeneratedFonts(generatedPdfs.real);
+  await assertGeneratedFonts(generatedPdfs.dummy);
 
-  await fs.rm(templateDir, { recursive: true, force: true });
-  await fs.rm(generatedDir, { recursive: true, force: true });
-  await fs.mkdir(templateDir, { recursive: true });
-  await fs.mkdir(generatedDir, { recursive: true });
+  const pdfSets = {
+    template: { pdf: templatePdf, dir: path.resolve(compareDir, "template") },
+    real: { pdf: generatedPdfs.real, dir: path.resolve(compareDir, "real") },
+    dummy: { pdf: generatedPdfs.dummy, dir: path.resolve(compareDir, "dummy") }
+  };
 
-  await execFileAsync("pdftoppm", ["-png", "-r", "144", templatePdf, path.resolve(templateDir, "page")]);
-  await execFileAsync("pdftoppm", ["-png", "-r", "144", generatedPdf, path.resolve(generatedDir, "page")]);
+  for (const set of Object.values(pdfSets)) {
+    await fs.rm(set.dir, { recursive: true, force: true });
+    await fs.mkdir(set.dir, { recursive: true });
+    await execFileAsync("pdftoppm", ["-png", "-r", String(rasterDpi), set.pdf, path.resolve(set.dir, "page")]);
+    set.pages = await rasterPages(set.dir);
+  }
 
   const results = [];
 
   for (const page of pageChecks) {
-    const templateImage = path.resolve(templateDir, page.template);
-    const generatedImage = path.resolve(generatedDir, page.generated);
+    const templateImage = imageForPage(pdfSets.template, page.templatePage);
+    const generatedImage = imageForPage(pdfSets[page.generatedSet], page.generatedPage);
     const diffImage = path.resolve(compareDir, `pixel-${page.name}-diff.png`);
     const result = await compareImages({ templateImage, generatedImage, diffImage });
     results.push({ ...page, ...result, diffImage });
   }
 
+  for (const crop of cropChecks) {
+    const result = await compareAnchoredCrop({
+      check: crop,
+      templateSet: pdfSets.template,
+      generatedSet: pdfSets[crop.generatedSet]
+    });
+    results.push(result);
+  }
+
   let failed = false;
 
   for (const result of results) {
+    const requiredThreshold = result.threshold ?? threshold;
     const percent = (result.matchRatio * 100).toFixed(2);
     console.log(`${result.name}: ${percent}% match (${result.differentPixels}/${result.totalPixels} different)`);
     console.log(`diff: ${path.relative(rootDir, result.diffImage)}`);
 
-    if (result.matchRatio < threshold) {
+    if (result.matchRatio < requiredThreshold) {
       failed = true;
     }
   }
@@ -63,13 +132,148 @@ async function main() {
 }
 
 async function assertTool(command) {
-  const args = command === "pdftoppm" ? ["-v"] : ["-version"];
+  const args = command.startsWith("pdf") ? ["-v"] : ["-version"];
 
   try {
     await execFileAsync(command, args);
   } catch {
-    throw new Error(`Missing required tool "${command}". Run via: nix-shell -p poppler-utils imagemagick --run 'npm run test:pixel'`);
+    throw new Error(`Missing required tool "${command}". Run "npm run test:pixel" to execute the test inside the mdgen pixel-test container.`);
   }
+}
+
+async function assertGeneratedFonts(pdfPath) {
+  const { stdout } = await execFileAsync("pdffonts", [pdfPath]);
+
+  for (const fontName of ["LucidaSans", "LucidaSans-Demi"]) {
+    if (!stdout.includes(fontName)) {
+      throw new Error(`Missing generated font "${fontName}" in ${path.relative(rootDir, pdfPath)}`);
+    }
+  }
+
+  if (/\bHelvetica\b/.test(stdout)) {
+    throw new Error(`Unexpected Helvetica fallback in ${path.relative(rootDir, pdfPath)}`);
+  }
+}
+
+async function rasterPages(dir) {
+  const entries = await fs.readdir(dir);
+  const pages = new Map();
+
+  for (const entry of entries) {
+    const match = entry.match(/^page-(\d+)\.png$/);
+    if (!match) {
+      continue;
+    }
+
+    pages.set(Number.parseInt(match[1], 10), path.resolve(dir, entry));
+  }
+
+  return pages;
+}
+
+function imageForPage(set, pageNumber) {
+  const image = set.pages.get(pageNumber);
+
+  if (!image) {
+    throw new Error(`Missing rasterized page ${pageNumber} for ${set.pdf}`);
+  }
+
+  return image;
+}
+
+async function compareAnchoredCrop({ check, templateSet, generatedSet }) {
+  const templateAnchor = await locateWord(templateSet.pdf, check.templateAnchorText ?? check.anchorText, `template-${check.name}`, check.templatePageNumber);
+  const generatedAnchor = await locateWord(generatedSet.pdf, check.generatedAnchorText ?? check.anchorText, `${check.generatedSet}-${check.name}`, check.generatedPageNumber);
+  const templateImage = imageForPage(templateSet, templateAnchor.pageNumber);
+  const generatedImage = imageForPage(generatedSet, generatedAnchor.pageNumber);
+  const templateCrop = path.resolve(compareDir, `pixel-${check.name}-template-crop.png`);
+  const generatedCrop = path.resolve(compareDir, `pixel-${check.name}-generated-crop.png`);
+  const templateCompare = check.normalize ? path.resolve(compareDir, `pixel-${check.name}-template-normalized.png`) : templateCrop;
+  const generatedCompare = check.normalize ? path.resolve(compareDir, `pixel-${check.name}-generated-normalized.png`) : generatedCrop;
+  const diffImage = path.resolve(compareDir, `pixel-${check.name}-diff.png`);
+
+  await cropImageAroundAnchor({ image: templateImage, anchor: templateAnchor, crop: check.crop, output: templateCrop });
+  await cropImageAroundAnchor({ image: generatedImage, anchor: generatedAnchor, crop: check.crop, output: generatedCrop });
+
+  if (check.normalize) {
+    await normalizeImage({ input: templateCrop, output: templateCompare, mode: check.normalize });
+    await normalizeImage({ input: generatedCrop, output: generatedCompare, mode: check.normalize });
+  }
+
+  const result = await compareImages({ templateImage: templateCompare, generatedImage: generatedCompare, diffImage });
+  return { ...check, ...result, diffImage };
+}
+
+async function locateWord(pdfPath, text, label, targetPageNumber) {
+  const bboxPath = path.resolve(compareDir, `${label}-bbox.html`);
+  await execFileAsync("pdftotext", ["-bbox-layout", pdfPath, bboxPath]);
+  const html = await fs.readFile(bboxPath, "utf8");
+  let pageNumber = 0;
+
+  for (const line of html.split(/\r?\n/)) {
+    if (line.includes("<page ")) {
+      pageNumber += 1;
+      continue;
+    }
+
+    if (!line.includes("<word ")) {
+      continue;
+    }
+
+    if (targetPageNumber && pageNumber !== targetPageNumber) {
+      continue;
+    }
+
+    const word = textContent(line);
+    if (word !== text) {
+      continue;
+    }
+
+    return {
+      pageNumber,
+      xMin: numberAttribute(line, "xMin"),
+      yMin: numberAttribute(line, "yMin"),
+      xMax: numberAttribute(line, "xMax"),
+      yMax: numberAttribute(line, "yMax")
+    };
+  }
+
+  throw new Error(`Could not locate "${text}" in ${pdfPath}`);
+}
+
+function textContent(line) {
+  return line.replace(/^.*?>/, "").replace(/<\/word>.*$/, "").replaceAll("&amp;", "&");
+}
+
+function numberAttribute(line, name) {
+  const match = line.match(new RegExp(`${name}="([^"]+)"`));
+
+  if (!match) {
+    throw new Error(`Missing ${name} in bbox line: ${line}`);
+  }
+
+  return Number.parseFloat(match[1]);
+}
+
+async function cropImageAroundAnchor({ image, anchor, crop, output }) {
+  const x = Math.max(0, Math.round((anchor.xMin - crop.leftPadPt) * pointsToPixels));
+  const y = Math.max(0, Math.round((anchor.yMin - crop.topPadPt) * pointsToPixels));
+  const cropArg = `${crop.widthPx}x${crop.heightPx}+${x}+${y}`;
+  await execFileAsync("magick", [image, "-crop", cropArg, "+repage", output]);
+}
+
+async function normalizeImage({ input, output, mode }) {
+  if (mode === "posterize-3") {
+    await execFileAsync("magick", [input, "-colorspace", "Gray", "-posterize", "3", output]);
+    return;
+  }
+
+  if (mode === "binary-dilate-2") {
+    await execFileAsync("magick", [input, "-colorspace", "Gray", "-threshold", "80%", "-morphology", "Dilate", "Disk:2", output]);
+    return;
+  }
+
+  throw new Error(`Unknown normalization mode: ${mode}`);
 }
 
 async function compareImages({ templateImage, generatedImage, diffImage }) {

@@ -1,0 +1,26 @@
+FROM node:22-bookworm
+
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    PUPPETEER_SKIP_DOWNLOAD=true \
+    DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    chromium \
+    fonts-liberation \
+    imagemagick \
+    poppler-utils \
+  && if ! command -v magick >/dev/null 2>&1; then ln -s /usr/bin/convert /usr/local/bin/magick; fi \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/mdgen
+
+COPY mdgen/package.json mdgen/package-lock.json ./
+RUN npm ci
+
+COPY mdgen/src ./src
+
+ENV MDGEN_WORKSPACE=/workspace
+
+CMD ["npm", "run", "test:pixel:raw"]

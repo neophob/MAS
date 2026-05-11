@@ -4,12 +4,15 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import matter from "gray-matter";
 import MarkdownIt from "markdown-it";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import puppeteer from "puppeteer";
 
 const execFileAsync = promisify(execFile);
 
-const rootDir = path.resolve(import.meta.dirname, "..", "..");
+const rootDir = process.env.MDGEN_WORKSPACE
+  ? path.resolve(process.env.MDGEN_WORKSPACE)
+  : path.resolve(import.meta.dirname, "..", "..");
 const mdgenDir = path.resolve(rootDir, "mdgen");
 const defaultDocDir = path.resolve(rootDir, "doc");
 const templateDocx = path.resolve(rootDir, "template", "Thesisvorlage mit Titelbild1.0.docx");
@@ -37,6 +40,7 @@ async function main() {
 
   await ensureDirectories();
   const templateAssets = await ensureTemplateAssets();
+  const fontAssets = await ensureFontAssets();
 
   const markdownFiles = await getMarkdownFiles(options.sourceDir);
   if (markdownFiles.length === 0) {
@@ -62,7 +66,8 @@ async function main() {
     headings,
     contentHtml,
     coverImageUrl: templateAssets.coverImage,
-    footerLogoUrl: templateAssets.footerLogo
+    footerLogoUrl: templateAssets.footerLogo,
+    fontAssets
   });
 
   const htmlPath = path.resolve(outputDir, `thesis-${options.target}.html`);
@@ -131,6 +136,23 @@ async function ensureTemplateAssets() {
     coverImage: await fileToDataUrl(path.resolve(templateAssetDir, "image1.png"), "image/png"),
     footerLogo: await fileToDataUrl(path.resolve(templateAssetDir, "image3.jpg"), "image/jpeg"),
     sampleImage: await fileToDataUrl(path.resolve(templateAssetDir, "image4.jpeg"), "image/jpeg")
+  };
+}
+
+async function ensureFontAssets() {
+  const fontDir = path.resolve(mdgenDir, "assets", "fonts");
+  const regular = path.resolve(fontDir, "LucidaSans.ttf");
+  const demi = path.resolve(fontDir, "LucidaSansDemi.ttf");
+
+  try {
+    await Promise.all([fs.access(regular), fs.access(demi)]);
+  } catch {
+    throw new Error(`Missing Lucida Sans font assets in ${fontDir}`);
+  }
+
+  return {
+    regular: await fileToDataUrl(regular, "font/ttf"),
+    demi: await fileToDataUrl(demi, "font/ttf")
   };
 }
 
@@ -250,7 +272,7 @@ function createMarkdownRenderer(headings) {
   return md;
 }
 
-function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogoUrl }) {
+function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogoUrl, fontAssets }) {
   const tocHtml = headings
     .filter((item) => item.level <= 3)
     .map((item) => {
@@ -269,6 +291,22 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
     <meta charset="utf-8">
     <title>${escapeHtml(meta.title)}</title>
     <style>
+      @font-face {
+        font-family: "ThesisLucidaSans";
+        src: url("${fontAssets.regular}") format("truetype");
+        font-style: normal;
+        font-weight: 400;
+        font-display: block;
+      }
+
+      @font-face {
+        font-family: "ThesisLucidaSans";
+        src: url("${fontAssets.demi}") format("truetype");
+        font-style: normal;
+        font-weight: 700;
+        font-display: block;
+      }
+
       :root {
         --brand-yellow: #fac300;
         --brand-yellow-border: #ffc000;
@@ -277,6 +315,7 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
         --gray-rule: #d0d0d0;
         --light-gray: #e6e6e6;
         --mid-gray: #a6a6a6;
+        --font-sans: "ThesisLucidaSans", "Lucida Sans", Arial, Helvetica, sans-serif;
       }
 
       @page {
@@ -299,7 +338,7 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
 
       body {
         color: var(--body-text);
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: var(--font-sans);
         font-size: 9.5pt;
         line-height: 1.32;
         -webkit-print-color-adjust: exact;
@@ -342,7 +381,7 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
       }
 
       .cover-title {
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: var(--font-sans);
         font-size: 24pt;
         line-height: 1.18;
         letter-spacing: 0;
@@ -350,7 +389,7 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
       }
 
       .cover-subtitle {
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: var(--font-sans);
         font-size: 14pt;
         line-height: 1.1;
         margin-bottom: 9mm;
@@ -370,7 +409,7 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
       .cover-meta td {
         background: transparent;
         border: 0;
-        padding: 1.15mm 0;
+        padding: 0.98mm 0;
         vertical-align: top;
       }
 
@@ -385,11 +424,17 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
       }
 
       .frontmatter-title {
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 16pt;
+        font-family: var(--font-sans);
+        font-size: 14pt;
         font-weight: 400;
-        line-height: 1.1;
+        line-height: 1.2;
         margin: 0 0 6.5mm;
+      }
+
+      .toc .frontmatter-title {
+        position: relative;
+        top: -1.2mm;
+        margin-bottom: 8.1mm;
       }
 
       .frontmatter-title::before {
@@ -461,7 +506,7 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
       }
 
       h1 {
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: var(--font-sans);
         font-size: 14pt;
         font-weight: 400;
         line-height: 1.2;
@@ -469,15 +514,15 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
       }
 
       h2 {
-        font-family: Arial, Helvetica, sans-serif;
-        font-size: 13pt;
+        font-family: var(--font-sans);
+        font-size: 10.6pt;
         font-weight: 700;
         line-height: 1.2;
         margin-top: 8mm;
       }
 
       h3 {
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: var(--font-sans);
         font-size: 13pt;
         font-weight: 700;
         line-height: 1.2;
@@ -485,7 +530,7 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
       }
 
       h4 {
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: var(--font-sans);
         font-size: 14pt;
         font-weight: 700;
         line-height: 1.2;
@@ -518,24 +563,65 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
       }
 
       .thesis-body table {
-        width: 100%;
-        border-collapse: separate;
+        width: calc(100% + 1.8mm);
+        margin: 0 0 4mm 3mm;
+        border-collapse: collapse;
         border-spacing: 0;
+        table-layout: fixed;
+        font-family: var(--font-sans);
+        font-size: 9.8pt;
+        line-height: 1.2;
       }
 
       .thesis-body th,
       .thesis-body td {
-        border-right: 0.25mm solid #ffffff;
-        border-bottom: 0.25mm solid #ffffff;
-        padding: 1.8mm 2.6mm;
+        height: 6.25mm;
+        border: 0.25mm solid #ffffff;
+        padding: 0.45mm 1.5mm 0.35mm;
         text-align: left;
-        vertical-align: top;
+        vertical-align: middle;
         background: var(--light-gray);
       }
 
-      .thesis-body th {
+      .thesis-body thead th {
         background: var(--mid-gray);
         font-weight: 700;
+      }
+
+      .thesis-body tbody th {
+        background: var(--light-gray);
+        font-weight: 700;
+      }
+
+      .thesis-body table:has(thead th:empty) {
+        width: calc(100% + 1.8mm);
+      }
+
+      .thesis-body table:has(thead th:empty) thead tr {
+        position: relative;
+      }
+
+      .thesis-body table:has(thead th:empty) thead th:first-child {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        width: 100%;
+      }
+
+      .thesis-body table:has(thead th:empty) thead th:not(:first-child) {
+        color: transparent;
+      }
+
+      .thesis-body table:has(thead th:empty) tbody tr:first-child td {
+        font-weight: 700;
+      }
+
+      .thesis-body table + p {
+        margin: -1mm 0 6mm;
+        font-size: 8pt;
+        line-height: 1.2;
       }
 
       figure {
@@ -577,7 +663,7 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
         position: absolute;
         left: 25.3mm;
         right: 17.7mm;
-        bottom: 9.5mm;
+        bottom: 10.3mm;
         display: flex;
         align-items: flex-end;
         gap: 46.6mm;
@@ -590,7 +676,7 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
 
       .cover-footer-department {
         color: #808080;
-        font-size: 9.5pt;
+        font-size: 8pt;
         line-height: 1.1;
       }
     </style>
@@ -639,10 +725,16 @@ function renderDocument({ meta, headings, contentHtml, coverImageUrl, footerLogo
 }
 
 async function renderPdf({ html, meta, pdfPath }) {
-  const browser = await puppeteer.launch({
-    headless: "shell",
+  const launchOptions = {
+    headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"]
-  });
+  };
+
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+
+  const browser = await puppeteer.launch(launchOptions);
 
   try {
     const page = await browser.newPage();
@@ -670,7 +762,9 @@ async function renderPdf({ html, meta, pdfPath }) {
 async function stampRunningFooter({ pdfPath, thesisLabel }) {
   const pdfBytes = await fs.readFile(pdfPath);
   const pdfDoc = await PDFDocument.load(pdfBytes);
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  pdfDoc.registerFontkit(fontkit);
+  const footerFontBytes = await fs.readFile(path.resolve(mdgenDir, "assets", "fonts", "LucidaSans.ttf"));
+  const font = await pdfDoc.embedFont(footerFontBytes, { subset: true });
   const pages = pdfDoc.getPages();
   const footerColor = rgb(0x64 / 255, 0x84 / 255, 0x9b / 255);
 

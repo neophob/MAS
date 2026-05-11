@@ -1,0 +1,37 @@
+name: mdgen pixel test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  pixel-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Build pixel-test image
+        run: bash mdgen/scripts/build-pixel-image.sh
+        env:
+          MDGEN_PIXEL_IMAGE: mdgen-pixel:ci
+
+      - name: Run pixel test
+        run: bash mdgen/scripts/test-pixel.sh
+        env:
+          MDGEN_PIXEL_IMAGE: mdgen-pixel:ci
+          MDGEN_PIXEL_SKIP_BUILD: "1"
+
+      - name: Upload generated PDFs and diffs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mdgen-output
+          path: mdgen/output

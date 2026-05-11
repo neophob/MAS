@@ -32,13 +32,16 @@ Die Pipeline besteht aus drei Schritten:
 2. Das Layout wird mit HTML und CSS an die Thesisvorlage angelehnt.
 3. Ein Headless-Browser rendert das Ergebnis in eine PDF-Datei.
 
-## Beispieltabelle
+## Überschrift
 
-| Schritt | Ergebnis |
-| --- | --- |
-| Einlesen | Markdown geladen |
-| Rendern | HTML erzeugt |
-| Export | PDF erzeugt |
+| Tabellenkopf |  |  |  |
+| --- | --- | --- | --- |
+| w | x | y | z |
+| 1 | 1000 | 12.5 % | 12.5 % |
+| 2 | 1000 | 12.5 % | 12.5 % |
+| 3 | 1000 | 12.5 % | 12.5 % |
+
+Tabelle 1: Et ut aut isti repuditis qui ium
 
 # Ergebnis
 

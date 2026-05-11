@@ -7,9 +7,13 @@
     "build": "node src/build.mjs",
     "build:real": "node src/build.mjs --target real",
     "build:dummy": "node src/build.mjs --target dummy",
-    "test:pixel": "npm run build:real && node src/pixel-test.mjs"
+    "clean:output": "node src/clean-output.mjs",
+    "pixel:image": "bash scripts/build-pixel-image.sh",
+    "test:pixel": "bash scripts/test-pixel.sh",
+    "test:pixel:raw": "node src/run-pixel-test.mjs"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
     "gray-matter": "^4.0.3",
     "markdown-it": "^14.1.0",
     "pdf-lib": "^1.17.1",
