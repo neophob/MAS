@@ -1,0 +1,18 @@
+{
+  "name": "mdgen",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node src/build.mjs",
+    "build:real": "node src/build.mjs --target real",
+    "build:dummy": "node src/build.mjs --target dummy",
+    "test:pixel": "npm run build:real && node src/pixel-test.mjs"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "markdown-it": "^14.1.0",
+    "pdf-lib": "^1.17.1",
+    "puppeteer": "^24.10.2"
+  }
+}
