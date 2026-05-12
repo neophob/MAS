@@ -3,6 +3,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { resolvePdfAnchorPageNumbers } from "./pdf-anchor-page-numbers.mjs";
+import { formatIsoDate, formatSwissDate, readCurrentGitHash, slugify } from "./shared-utils.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -302,7 +303,7 @@ async function compareTextChecks(pdfPath, checks) {
 }
 
 async function createTextChecks() {
-  const gitHash = await readCurrentGitHash();
+  const gitHash = await readCurrentGitHash(rootDir);
   const generatedAt = new Date();
   const generatedDate = formatIsoDate(generatedAt);
   const declarationDate = formatSwissDate(generatedAt);
@@ -327,73 +328,6 @@ function reportTimestamp() {
   }
 
   return new Date().toISOString();
-}
-
-async function readCurrentGitHash() {
-  try {
-    const gitDir = await resolveGitDir(rootDir);
-    if (!gitDir) {
-      return "unknown";
-    }
-
-    const head = (await fs.readFile(path.resolve(gitDir, "HEAD"), "utf8")).trim();
-    if (/^[a-f0-9]{7,40}$/i.test(head)) {
-      return head.slice(0, 7);
-    }
-
-    const ref = head.match(/^ref:\s+(.+)$/)?.[1];
-    if (!ref) {
-      return "unknown";
-    }
-
-    const refPath = path.resolve(gitDir, ref);
-    try {
-      return (await fs.readFile(refPath, "utf8")).trim().slice(0, 7);
-    } catch {
-      return await readPackedGitRef(gitDir, ref);
-    }
-  } catch {
-    return "unknown";
-  }
-}
-
-async function resolveGitDir(repoDir) {
-  const dotGit = path.resolve(repoDir, ".git");
-  const stat = await fs.stat(dotGit).catch(() => undefined);
-  if (!stat) {
-    return undefined;
-  }
-
-  if (stat.isDirectory()) {
-    return dotGit;
-  }
-
-  const content = await fs.readFile(dotGit, "utf8");
-  const gitDir = content.match(/^gitdir:\s*(.+)$/m)?.[1]?.trim();
-  if (!gitDir) {
-    return undefined;
-  }
-
-  return path.resolve(repoDir, gitDir);
-}
-
-async function readPackedGitRef(gitDir, ref) {
-  const packedRefs = await fs.readFile(path.resolve(gitDir, "packed-refs"), "utf8");
-  const line = packedRefs
-    .split(/\r?\n/)
-    .find((entry) => entry.endsWith(` ${ref}`));
-  return line?.split(" ")[0]?.slice(0, 7) ?? "unknown";
-}
-
-function formatIsoDate(date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function formatSwissDate(date) {
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const year = String(date.getUTCFullYear());
-  return `${day}.${month}.${year}`;
 }
 
 function escapeRegExp(value) {
@@ -478,16 +412,6 @@ function collectPageMismatch({ destinationPages, mismatches, id, expectedPage })
 
 function normalizeInlineText(value) {
   return value.replace(/\s+/g, " ").trim();
-}
-
-function slugify(value) {
-  return value
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-");
 }
 
 async function collectEnvironment() {

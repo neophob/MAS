@@ -20,6 +20,13 @@ Output files:
 
 ## Validate
 
+Run the fast lint checks:
+
+```bash
+cd mdgen
+npm run lint
+```
+
 Run the full local/CI-equivalent validation:
 
 ```bash

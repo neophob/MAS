@@ -9,6 +9,7 @@
   "scripts": {
     "build": "node src/build.mjs",
     "clean:output": "node src/clean-output.mjs",
+    "lint": "node src/lint.mjs",
     "pixel:image": "bash scripts/build-pixel-image.sh",
     "test:pixel": "bash scripts/test-pixel.sh",
     "test:pixel:raw": "node src/run-pixel-test.mjs"

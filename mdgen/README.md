@@ -8,6 +8,12 @@ Generate the real report:
 npm run build
 ```
 
+Run lint checks for JavaScript syntax, shell syntax, and direct dependency consistency:
+
+```bash
+npm run lint
+```
+
 Run the pixel comparison against `template/Thesisvorlage mit Titelbild1.0.pdf`:
 
 ```bash

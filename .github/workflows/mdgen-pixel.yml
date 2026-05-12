@@ -26,6 +26,10 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
+      - name: Run lint
+        working-directory: mdgen
+        run: npm run lint
+
       - name: Run pixel test
         working-directory: mdgen
         run: npm run test:pixel
