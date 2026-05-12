@@ -4,8 +4,8 @@ abstractTitle: "Abstract"
 ---
 
 Open-Source-Software ist ein zentraler Bestandteil moderner Softwareentwicklung, bringt jedoch
-Risiken durch verwundbare oder bösartige Drittanbieterpakete mit sich. Aktuelle Supply-Chain-
-Angriffe zeigen, dass Unternehmen ihre Abhängigkeiten besser kontrollieren müssen.
+Risiken durch verwundbare oder bösartige Drittanbieterpakete mit sich. Aktuelle Supply-Chain-Angriffe
+zeigen, dass Unternehmen ihre Abhängigkeiten besser kontrollieren müssen.
 
 Diese Arbeit untersucht Risiken durch verwundbare («vulnerable») und bösartige («malicious»)
 Open-Source-Packages mit Fokus auf das npm-Ökosystem, da dort aktuell besonders viele

@@ -270,9 +270,15 @@ async function compareTextChecks(pdfPath, checks) {
 
 async function createTextChecks() {
   const gitHash = await readCurrentGitHash();
-  const generatedDate = formatIsoDate(new Date());
+  const generatedAt = new Date();
+  const generatedDate = formatIsoDate(generatedAt);
+  const declarationDate = formatSwissDate(generatedAt);
   return [
     ...baseTextChecks,
+    {
+      name: "self-declaration-signoff",
+      pattern: new RegExp(`Ort, Datum:\\s+Bern,\\s+${escapeRegExp(declarationDate)}[\\s\\S]*Michael Vogt`)
+    },
     {
       name: "footer-build-metadata",
       pattern: new RegExp(`Minimierung von Software-Supply-Chain-Risiken[\\s\\S]*${escapeRegExp(gitHash)}[\\s\\S]*${escapeRegExp(generatedDate)}`)
@@ -348,6 +354,13 @@ async function readPackedGitRef(gitDir, ref) {
 
 function formatIsoDate(date) {
   return date.toISOString().slice(0, 10);
+}
+
+function formatSwissDate(date) {
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const year = String(date.getUTCFullYear());
+  return `${day}.${month}.${year}`;
 }
 
 function escapeRegExp(value) {

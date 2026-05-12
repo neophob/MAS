@@ -1,5 +1,6 @@
 ---
 role: "declaration"
+declarationPlace: "Bern"
 ---
 
 # Selbständigkeitserklärung
@@ -13,4 +14,7 @@ Ich bestätige weiterhin, dass ich bei der Erstellung dieser Studienarbeit durch
 gearbeitet habe und von einer KI erzeugte Texte bzw. Textfragmente nicht unreflektiert übernommen
 habe.
 
-Ort, Datum:
+<div class="declaration-signoff">
+  <p>Ort, Datum: {{declarationPlace}}, {{declarationDate}}</p>
+  <p class="declaration-signature">{{signatureName}}</p>
+</div>

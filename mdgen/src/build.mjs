@@ -77,7 +77,10 @@ Ich bestätige weiterhin, dass ich bei der Erstellung dieser Studienarbeit durch
 gearbeitet habe und von einer KI erzeugte Texte bzw. Textfragmente nicht unreflektiert übernommen
 habe.
 
-Ort, Datum:`
+<div class="declaration-signoff">
+  <p>Ort, Datum: {{declarationPlace}}, {{declarationDate}}</p>
+  <p class="declaration-signature">{{signatureName}}</p>
+</div>`
 };
 
 async function main() {
@@ -101,6 +104,7 @@ async function main() {
   }
 
   const meta = buildMetadata(files);
+  const generatedAt = new Date();
   const titleFile = files.find((file) => file.role === "title");
   const abstractFile = files.find((file) => file.role === "abstract");
   const contentFiles = files.filter(isContentFile);
@@ -124,6 +128,8 @@ async function main() {
   });
   const abstractHtml = renderAbstract({ abstractFile, meta });
   const backmatterHtml = renderBackmatter({
+    meta,
+    generatedAt,
     files: backmatterFiles,
     figures: figureEntries,
     tables: tableEntries
@@ -144,7 +150,7 @@ async function main() {
 
   const htmlPath = path.resolve(outputDir, `thesis-${options.target}.html`);
   const pdfPath = path.resolve(outputDir, `thesis-${options.target}.pdf`);
-  const footerLabel = await buildFooterLabel(meta);
+  const footerLabel = await buildFooterLabel(meta, generatedAt);
 
   await fs.writeFile(htmlPath, html, "utf8");
   await renderPdf({ html, pdfPath, footerLabel });
@@ -320,13 +326,27 @@ function renderCover({ titleFile, meta, coverImageUrl, footerLogoUrl }) {
   }
 
   const md = createPlainMarkdownRenderer();
-  const templateValues = {
-    ...meta,
+  const templateValues = buildTemplateValues(meta, {
     coverImageUrl,
     footerLogoUrl
-  };
+  });
   const markdown = replaceTemplateValues(titleFile.body, templateValues);
   return md.render(markdown, { sourcePath: titleFile.path }).trim();
+}
+
+function buildTemplateValues(meta, extra = {}) {
+  const generatedAt = extra.generatedAt ?? new Date();
+  const signatureName = String(meta.signatureName || meta.author || "").trim();
+  const declarationPlace = String(meta.declarationPlace || "Bern").trim();
+
+  return {
+    ...meta,
+    ...extra,
+    declarationPlace,
+    declarationDate: formatSwissDate(generatedAt),
+    generatedDate: formatIsoDate(generatedAt),
+    signatureName
+  };
 }
 
 function replaceTemplateValues(input, values) {
@@ -339,13 +359,14 @@ function replaceTemplateValues(input, values) {
   });
 }
 
-function renderBackmatter({ files, figures, tables }) {
+function renderBackmatter({ meta, generatedAt, files, figures, tables }) {
   const md = createPlainMarkdownRenderer();
   const fileByRole = new Map(files.map((file) => [file.role, file]));
+  const templateValues = buildTemplateValues(meta, { generatedAt });
   const renderRole = (role) => {
     const file = fileByRole.get(role);
     const markdown = file?.body || defaultBackmatterMarkdown[role];
-    return md.render(markdown, { sourcePath: file?.path ?? defaultDocDir }).trim();
+    return md.render(replaceTemplateValues(markdown, templateValues), { sourcePath: file?.path ?? defaultDocDir }).trim();
   };
 
   return `
@@ -891,6 +912,21 @@ function renderDocument({ meta, headings, backmatterTocEntries, coverHtml, abstr
         border-bottom: 0.25mm solid var(--gray-rule);
       }
 
+      .declaration-signoff {
+        margin-top: 12mm;
+      }
+
+      .declaration-signoff p {
+        margin-bottom: 0;
+      }
+
+      .declaration-signature {
+        margin-top: 7mm;
+        font-family: "Dancing Script", "Segoe Script", "Snell Roundhand", "Brush Script MT", "Apple Chancery", "Lucida Handwriting", cursive;
+        font-size: 20pt;
+        line-height: 1;
+      }
+
       .chapter-block + .chapter-block {
         margin-top: 0;
       }
@@ -1177,10 +1213,10 @@ async function stampRunningFooter({ pdfPath, footerLabel }) {
   await fs.writeFile(pdfPath, await pdfDoc.save());
 }
 
-async function buildFooterLabel(meta) {
+async function buildFooterLabel(meta, generatedAt = new Date()) {
   const gitHash = await readCurrentGitHash();
-  const generatedDate = formatIsoDate(new Date());
-  return `${meta.title}, ${gitHash}, ${generatedDate}`;
+  const generatedDate = formatIsoDate(generatedAt);
+  return `${meta.title}, Commit: ${gitHash}, ${generatedDate}`;
 }
 
 function fitFooterLabel({ font, label, maxWidth, size }) {
@@ -1270,6 +1306,13 @@ async function readPackedGitRef(gitDir, ref) {
 
 function formatIsoDate(date) {
   return date.toISOString().slice(0, 10);
+}
+
+function formatSwissDate(date) {
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const year = String(date.getUTCFullYear());
+  return `${day}.${month}.${year}`;
 }
 
 function resolveAssetUrl(src, sourcePath) {

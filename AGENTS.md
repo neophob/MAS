@@ -3,6 +3,7 @@
 ## Scope
 
 This repository generates the thesis PDF from Markdown in `doc/` using the Node.js tooling in `mdgen/`.
+Use Node.js 24 or newer for all local and CI mdgen commands.
 
 ## Generate
 
