@@ -127,10 +127,11 @@ async function main() {
     footerLogoUrl: templateAssets.footerLogo
   });
   const abstractHtml = renderAbstract({ abstractFile, meta });
-  const htmlPath = path.resolve(outputDir, `thesis-${options.target}.html`);
   const pdfPath = path.resolve(outputDir, `thesis-${options.target}.pdf`);
+  const staleHtmlPath = path.resolve(outputDir, `thesis-${options.target}.html`);
   const firstPassPdfPath = path.resolve(outputDir, `.thesis-${options.target}-toc-pass.pdf`);
   const footerLabel = await buildFooterLabel(meta, generatedAt);
+  await fs.rm(staleHtmlPath, { force: true });
 
   const firstPassBackmatterTocEntries = createBackmatterTocEntries();
   const firstPassBackmatterHtml = renderBackmatter({
@@ -181,7 +182,6 @@ async function main() {
     fontAssets
   });
 
-  await fs.writeFile(htmlPath, html, "utf8");
   await renderPdf({ html, pdfPath, footerLabel });
   validateResolvedPageNumbers({
     headings,
