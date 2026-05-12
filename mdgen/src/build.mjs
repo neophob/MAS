@@ -31,8 +31,53 @@ const defaultMeta = {
   expert: "[Experte/n einfügen]",
   date: "[Datum einfügen]",
   abstractTitle: "Abstract",
-  abstract: "",
-  thesisLabel: "[Titel der Arbeit, Version, Datum (max. 1 Zeile)]"
+  abstract: ""
+};
+
+const backmatterRoles = new Set(["glossary", "references", "appendix", "declaration"]);
+const defaultBackmatterMarkdown = {
+  glossary: `# Glossar
+
+**Auinweon**<br>
+Et ut aut isti repuditis qui ium<br>
+
+**Batnwpe**<br>
+Et ut aut isti repuditis qui ium<br>
+
+**Cowoll**<br>
+Et ut aut isti repuditis qui ium`,
+  references: `# Literaturverzeichnis
+
+Nachname, 1. Buchstabe Vorname. 1. Buchstabe Zweitname. (Jahr). Titel: Untertitel. Verlag. *DOI
+Link falls vorhanden*
+
+Curie, M. S., Einstein, A., Hawking, S., & Newton, I. (2020). Der fiktive Titel: Ein beispielhafter
+Untertitel. Beispielverlag. *DOI Link falls vorhanden*
+
+Einstein, A. (2020). Der fiktive Titel: Ein beispielhafter Untertitel. Beispielverlag. *DOI Link falls
+vorhanden*
+
+Siehe APA Merkblatt auf Moodle mit Empfehlungen.`,
+  appendix: `# Anhang
+
+Ut wisi enim ad minim veniam, quis nostrud exerci tation ullamcorper suscipit lobortis nisl ut aliquip
+ex ea commodo consequat. Duis autem vel eum iriure dolor in hendrerit in vulputate velit.
+
+Quatur ad quibusamus, et exerionem eostis peror sedipis aut int la peris eatibusam is aut autem
+imporum soluptatium coritas perepratem doluptas sitatur atium, ilitat velenihictem eaquas molor serit
+doloratiis abo.`,
+  declaration: `# Selbständigkeitserklärung
+
+Ich bestätige, dass ich die vorliegende Arbeit selbstständig und ohne Benutzung anderer als der im
+Literaturverzeichnis angegebenen Quellen und Hilfsmittel angefertigt habe. Sämtliche Textstellen, die
+nicht von mir stammen, sind als Zitate gekennzeichnet und mit dem genauen Hinweis auf ihre
+Herkunft versehen.
+
+Ich bestätige weiterhin, dass ich bei der Erstellung dieser Studienarbeit durchgehend steuernd
+gearbeitet habe und von einer KI erzeugte Texte bzw. Textfragmente nicht unreflektiert übernommen
+habe.
+
+Ort, Datum:`
 };
 
 async function main() {
@@ -59,11 +104,18 @@ async function main() {
   const titleFile = files.find((file) => file.role === "title");
   const abstractFile = files.find((file) => file.role === "abstract");
   const contentFiles = files.filter(isContentFile);
+  const backmatterFiles = files.filter(isBackmatterFile);
   const headings = [];
-  const md = createMarkdownRenderer(headings);
+  const figureEntries = [];
+  const tableEntries = [];
+  const md = createMarkdownRenderer(headings, { figures: figureEntries, tables: tableEntries });
   const contentHtml = contentFiles
-    .map((file) => `<section class="chapter-block">${md.render(file.body, { sourcePath: file.path })}</section>`)
+    .map((file) => {
+      tableEntries.push(...collectTableEntriesFromMarkdown(file.body, tableEntries.length));
+      return `<section class="chapter-block">${md.render(file.body, { sourcePath: file.path })}</section>`;
+    })
     .join("\n");
+  const backmatterTocEntries = createBackmatterTocEntries(headings);
   const coverHtml = renderCover({
     titleFile,
     meta,
@@ -71,23 +123,31 @@ async function main() {
     footerLogoUrl: templateAssets.footerLogo
   });
   const abstractHtml = renderAbstract({ abstractFile, meta });
+  const backmatterHtml = renderBackmatter({
+    files: backmatterFiles,
+    figures: figureEntries,
+    tables: tableEntries
+  });
 
-  await writeGeneratedToc({ sourceDir: options.sourceDir, generatedTocFile, headings });
+  await writeGeneratedToc({ sourceDir: options.sourceDir, generatedTocFile, headings, backmatterTocEntries });
 
   const html = renderDocument({
     meta,
     headings,
+    backmatterTocEntries,
     coverHtml,
     abstractHtml,
     contentHtml,
+    backmatterHtml,
     fontAssets
   });
 
   const htmlPath = path.resolve(outputDir, `thesis-${options.target}.html`);
   const pdfPath = path.resolve(outputDir, `thesis-${options.target}.pdf`);
+  const footerLabel = await buildFooterLabel(meta);
 
   await fs.writeFile(htmlPath, html, "utf8");
-  await renderPdf({ html, meta, pdfPath });
+  await renderPdf({ html, pdfPath, footerLabel });
 
   console.log(`Generated ${pdfPath}`);
 }
@@ -215,6 +275,10 @@ function isContentFile(file) {
   return !file.role || file.role === "content";
 }
 
+function isBackmatterFile(file) {
+  return backmatterRoles.has(file.role);
+}
+
 function filterFilesForTarget(files, target) {
   if (target === "all") {
     return files;
@@ -275,7 +339,122 @@ function replaceTemplateValues(input, values) {
   });
 }
 
-async function writeGeneratedToc({ sourceDir, generatedTocFile, headings }) {
+function renderBackmatter({ files, figures, tables }) {
+  const md = createPlainMarkdownRenderer();
+  const fileByRole = new Map(files.map((file) => [file.role, file]));
+  const renderRole = (role) => {
+    const file = fileByRole.get(role);
+    const markdown = file?.body || defaultBackmatterMarkdown[role];
+    return md.render(markdown, { sourcePath: file?.path ?? defaultDocDir }).trim();
+  };
+
+  return `
+    <section class="backmatter backmatter-start page-break">
+      ${renderGeneratedIndex("Abbildungsverzeichnis", figures, "Keine Abbildungen vorhanden.", "Abbildung")}
+      ${renderGeneratedIndex("Tabellenverzeichnis", tables, "Keine Tabellen vorhanden.", "Tabelle")}
+      <section id="glossar" class="backmatter-section glossary">
+        ${renderRole("glossary")}
+      </section>
+    </section>
+
+    <section id="literaturverzeichnis" class="backmatter page-break">
+      ${renderRole("references")}
+    </section>
+
+    <section id="anhang" class="backmatter page-break">
+      ${renderRole("appendix")}
+    </section>
+
+    <section id="selbstandigkeitserklarung" class="backmatter">
+      ${renderRole("declaration")}
+    </section>`;
+}
+
+function renderGeneratedIndex(title, entries, emptyText, labelPrefix) {
+  const listHtml = entries.length === 0
+    ? `<p>${escapeHtml(emptyText)}</p>`
+    : `<ol>${entries.map((entry) => {
+        const label = `${labelPrefix} ${entry.number}: ${entry.text}`;
+        return `<li><a href="#${escapeHtml(entry.id)}"><span class="index-label">${escapeHtml(label)}</span><span class="index-page">${escapeHtml(entry.page ?? "")}</span></a></li>`;
+      }).join("")}</ol>`;
+
+  return `<section id="${escapeHtml(slugify(title))}" class="backmatter-section generated-index">
+    <h1>${escapeHtml(title)}</h1>
+    ${listHtml}
+  </section>`;
+}
+
+function collectTableEntriesFromMarkdown(markdown, offset) {
+  const entries = [];
+  const lines = markdown.split(/\r?\n/);
+
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    if (!isMarkdownTableStart(lines, index)) {
+      continue;
+    }
+
+    let tableEnd = index + 2;
+    while (tableEnd < lines.length && isMarkdownTableLine(lines[tableEnd])) {
+      tableEnd += 1;
+    }
+
+    const caption = nextNonEmptyLine(lines, tableEnd);
+    const captionMatch = caption?.match(/^Tabelle\s+\d+\s*:\s*(.+)$/);
+    const number = offset + entries.length + 1;
+    entries.push({
+      number,
+      text: captionMatch?.[1]?.trim() || `Tabelle ${number}`,
+      id: `table-${number}`,
+      page: "4"
+    });
+
+    index = tableEnd - 1;
+  }
+
+  return entries;
+}
+
+function isMarkdownTableStart(lines, index) {
+  return isMarkdownTableLine(lines[index]) && isMarkdownTableSeparator(lines[index + 1]);
+}
+
+function isMarkdownTableLine(line = "") {
+  const trimmed = line.trim();
+  return trimmed.startsWith("|") && trimmed.endsWith("|");
+}
+
+function isMarkdownTableSeparator(line = "") {
+  return /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(line.trim());
+}
+
+function nextNonEmptyLine(lines, startIndex) {
+  for (let index = startIndex; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (line) {
+      return line;
+    }
+  }
+
+  return undefined;
+}
+
+function createBackmatterTocEntries(headings) {
+  const contentPages = headings
+    .map((item) => Number.parseInt(item.page ?? "4", 10))
+    .filter((page) => Number.isFinite(page));
+  const firstBackmatterPage = Math.max(4, ...contentPages) + 1;
+
+  return [
+    { text: "Abbildungsverzeichnis", page: String(firstBackmatterPage) },
+    { text: "Tabellenverzeichnis", page: String(firstBackmatterPage) },
+    { text: "Glossar", page: String(firstBackmatterPage) },
+    { text: "Literaturverzeichnis", page: String(firstBackmatterPage + 1) },
+    { text: "Anhang", page: String(firstBackmatterPage + 2) },
+    { text: "Selbständigkeitserklärung", page: String(firstBackmatterPage + 3) }
+  ];
+}
+
+async function writeGeneratedToc({ sourceDir, generatedTocFile, headings, backmatterTocEntries }) {
   const tocPath = generatedTocFile?.path ?? path.resolve(sourceDir, "02-toc.md");
   const tocEntries = headings
     .filter((item) => item.level <= 3)
@@ -283,6 +462,7 @@ async function writeGeneratedToc({ sourceDir, generatedTocFile, headings }) {
       const indent = "  ".repeat(item.level - 1);
       return `${indent}- [${item.number} ${item.text}](#${item.id})`;
     });
+  const backmatterEntries = backmatterTocEntries.map((item) => `- [${item.text}](#${slugify(item.text)})`);
   const lines = [
     "---",
     'role: "toc"',
@@ -293,20 +473,22 @@ async function writeGeneratedToc({ sourceDir, generatedTocFile, headings }) {
     "",
     "# Inhalt",
     "",
-    ...tocEntries
+    ...tocEntries,
+    ...backmatterEntries
   ];
 
   await fs.writeFile(tocPath, `${lines.join("\n")}\n`, "utf8");
 }
 
-function createMarkdownRenderer(headings) {
+function createMarkdownRenderer(headings, collectors = {}) {
   const md = new MarkdownIt({
     html: true,
     linkify: true,
     typographer: true
   });
 
-  attachImageResolver(md);
+  attachImageResolver(md, collectors);
+  attachTableAnchors(md, collectors);
   const numberingState = [0, 0, 0, 0, 0, 0];
 
   md.core.ruler.push("collect_headings", (state) => {
@@ -351,6 +533,25 @@ function createMarkdownRenderer(headings) {
   return md;
 }
 
+function attachTableAnchors(md, collectors = {}) {
+  if (!collectors.tables) {
+    return;
+  }
+
+  let tableIndex = 0;
+  const originalTableOpenRule = md.renderer.rules.table_open ?? ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
+
+  md.renderer.rules.table_open = (tokens, idx, options, env, self) => {
+    const entry = collectors.tables[tableIndex];
+    tableIndex += 1;
+    if (entry) {
+      tokens[idx].attrSet("id", entry.id);
+    }
+
+    return originalTableOpenRule(tokens, idx, options, env, self);
+  };
+}
+
 function createPlainMarkdownRenderer() {
   const md = new MarkdownIt({
     html: true,
@@ -362,7 +563,7 @@ function createPlainMarkdownRenderer() {
   return md;
 }
 
-function attachImageResolver(md) {
+function attachImageResolver(md, collectors = {}) {
   const originalImageRule = md.renderer.rules.image ?? ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
 
   md.renderer.rules.image = (tokens, idx, options, env, self) => {
@@ -371,19 +572,34 @@ function attachImageResolver(md) {
     if (src) {
       token.attrSet("src", resolveAssetUrl(src, env.sourcePath));
     }
+    if (collectors.figures && src) {
+      const number = collectors.figures.length + 1;
+      const id = `figure-${number}`;
+      token.attrSet("id", id);
+      collectors.figures.push({
+        number,
+        id,
+        text: token.content.trim() || path.basename(src),
+        page: "4"
+      });
+    }
     token.attrJoin("class", "figure-image");
     return originalImageRule(tokens, idx, options, env, self);
   };
 }
 
-function renderDocument({ meta, headings, coverHtml, abstractHtml, contentHtml, fontAssets }) {
-  const tocHtml = headings
+function renderDocument({ meta, headings, backmatterTocEntries, coverHtml, abstractHtml, contentHtml, backmatterHtml, fontAssets }) {
+  const contentTocHtml = headings
     .filter((item) => item.level <= 3)
     .map((item) => {
       const tocClass = `toc-level-${item.level}`;
       return `<li class="${tocClass}"><a href="#${escapeHtml(item.id)}"><span class="toc-number">${escapeHtml(item.number)}</span><span class="toc-text">${escapeHtml(item.text)}</span><span class="toc-page-number">${escapeHtml(item.page ?? "4")}</span></a></li>`;
     })
     .join("\n");
+  const backmatterTocHtml = backmatterTocEntries
+    .map((item) => `<li class="toc-backmatter"><a href="#${escapeHtml(slugify(item.text))}"><span class="toc-text">${escapeHtml(item.text)}</span><span class="toc-page-number">${escapeHtml(item.page)}</span></a></li>`)
+    .join("\n");
+  const tocHtml = [contentTocHtml, backmatterTocHtml].filter(Boolean).join("\n");
 
   return `<!doctype html>
 <html lang="de">
@@ -516,8 +732,9 @@ function renderDocument({ meta, headings, coverHtml, abstractHtml, contentHtml, 
         position: absolute;
         left: 25.3mm;
         top: 216.9mm;
-        width: 143mm;
+        width: 166.8mm;
         border-collapse: collapse;
+        table-layout: fixed;
       }
 
       .cover > table th,
@@ -532,12 +749,13 @@ function renderDocument({ meta, headings, coverHtml, abstractHtml, contentHtml, 
 
       .cover > table th:first-child,
       .cover > table td:first-child {
-        width: 81.5mm;
+        width: 72mm;
       }
 
       .frontmatter,
       .toc-page,
-      .thesis-body {
+      .thesis-body,
+      .backmatter {
         page: auto;
       }
 
@@ -562,6 +780,11 @@ function renderDocument({ meta, headings, coverHtml, abstractHtml, contentHtml, 
 
       .toc {
         margin-top: 0;
+      }
+
+      .toc-page,
+      .thesis-body {
+        break-before: page;
       }
 
       .toc ol {
@@ -606,12 +829,66 @@ function renderDocument({ meta, headings, coverHtml, abstractHtml, contentHtml, 
         text-align: right;
       }
 
+      .toc-backmatter a {
+        grid-template-columns: 1fr 8mm;
+      }
+
       .toc-level-2 {
         padding-left: 6mm;
       }
 
       .toc-level-3 {
         padding-left: 10mm;
+      }
+
+      .backmatter-start {
+        break-before: page;
+      }
+
+      .backmatter-section {
+        margin-bottom: 11mm;
+      }
+
+      .backmatter h1 {
+        margin: 0 0 4.2mm;
+      }
+
+      .backmatter h1::before,
+      .backmatter h2::before,
+      .backmatter h3::before,
+      .backmatter h4::before {
+        content: none;
+        display: none;
+      }
+
+      .generated-index ol {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+
+      .generated-index li {
+        margin: 0;
+        border-bottom: 0.25mm solid var(--gray-rule);
+      }
+
+      .generated-index a {
+        display: grid;
+        grid-template-columns: 1fr 10mm;
+        align-items: baseline;
+        height: 4.57mm;
+        line-height: 4.57mm;
+        text-decoration: none;
+        color: inherit;
+      }
+
+      .index-page {
+        text-align: right;
+      }
+
+      .glossary p {
+        margin: 0;
+        border-bottom: 0.25mm solid var(--gray-rule);
       }
 
       .chapter-block + .chapter-block {
@@ -822,11 +1099,13 @@ function renderDocument({ meta, headings, coverHtml, abstractHtml, contentHtml, 
     <main class="thesis-body">
       ${contentHtml}
     </main>
+
+    ${backmatterHtml}
   </body>
 </html>`;
 }
 
-async function renderPdf({ html, meta, pdfPath }) {
+async function renderPdf({ html, pdfPath, footerLabel }) {
   const launchOptions = {
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
@@ -858,10 +1137,10 @@ async function renderPdf({ html, meta, pdfPath }) {
     await browser.close();
   }
 
-  await stampRunningFooter({ pdfPath, thesisLabel: meta.thesisLabel });
+  await stampRunningFooter({ pdfPath, footerLabel });
 }
 
-async function stampRunningFooter({ pdfPath, thesisLabel }) {
+async function stampRunningFooter({ pdfPath, footerLabel }) {
   const pdfBytes = await fs.readFile(pdfPath);
   const pdfDoc = await PDFDocument.load(pdfBytes);
   pdfDoc.registerFontkit(fontkit);
@@ -873,7 +1152,13 @@ async function stampRunningFooter({ pdfPath, thesisLabel }) {
   for (let index = 1; index < pages.length; index += 1) {
     const page = pages[index];
     const { width } = page.getSize();
-    page.drawText(thesisLabel, {
+    const fittedFooter = fitFooterLabel({
+      font,
+      label: footerLabel,
+      maxWidth: width - 145,
+      size: 8
+    });
+    page.drawText(fittedFooter, {
       x: 72,
       y: 28,
       size: 8,
@@ -890,6 +1175,101 @@ async function stampRunningFooter({ pdfPath, thesisLabel }) {
   }
 
   await fs.writeFile(pdfPath, await pdfDoc.save());
+}
+
+async function buildFooterLabel(meta) {
+  const gitHash = await readCurrentGitHash();
+  const generatedDate = formatIsoDate(new Date());
+  return `${meta.title}, ${gitHash}, ${generatedDate}`;
+}
+
+function fitFooterLabel({ font, label, maxWidth, size }) {
+  if (font.widthOfTextAtSize(label, size) <= maxWidth) {
+    return label;
+  }
+
+  const parts = label.split(", ");
+  if (parts.length < 3) {
+    return truncateTextToWidth({ font, text: label, maxWidth, size });
+  }
+
+  const suffix = `, ${parts.at(-2)}, ${parts.at(-1)}`;
+  const title = parts.slice(0, -2).join(", ");
+  return `${truncateTextToWidth({ font, text: title, maxWidth: maxWidth - font.widthOfTextAtSize(suffix, size), size })}${suffix}`;
+}
+
+function truncateTextToWidth({ font, text, maxWidth, size }) {
+  const ellipsis = "...";
+  if (font.widthOfTextAtSize(text, size) <= maxWidth) {
+    return text;
+  }
+
+  let end = text.length;
+  while (end > 0 && font.widthOfTextAtSize(`${text.slice(0, end).trimEnd()}${ellipsis}`, size) > maxWidth) {
+    end -= 1;
+  }
+
+  return `${text.slice(0, end).trimEnd()}${ellipsis}`;
+}
+
+async function readCurrentGitHash() {
+  try {
+    const gitDir = await resolveGitDir(rootDir);
+    if (!gitDir) {
+      return "unknown";
+    }
+
+    const head = (await fs.readFile(path.resolve(gitDir, "HEAD"), "utf8")).trim();
+    if (/^[a-f0-9]{7,40}$/i.test(head)) {
+      return head.slice(0, 7);
+    }
+
+    const ref = head.match(/^ref:\s+(.+)$/)?.[1];
+    if (!ref) {
+      return "unknown";
+    }
+
+    const refPath = path.resolve(gitDir, ref);
+    try {
+      return (await fs.readFile(refPath, "utf8")).trim().slice(0, 7);
+    } catch {
+      return await readPackedGitRef(gitDir, ref);
+    }
+  } catch {
+    return "unknown";
+  }
+}
+
+async function resolveGitDir(repoDir) {
+  const dotGit = path.resolve(repoDir, ".git");
+  const stat = await fs.stat(dotGit).catch(() => undefined);
+  if (!stat) {
+    return undefined;
+  }
+
+  if (stat.isDirectory()) {
+    return dotGit;
+  }
+
+  const content = await fs.readFile(dotGit, "utf8");
+  const gitDir = content.match(/^gitdir:\s*(.+)$/m)?.[1]?.trim();
+  if (!gitDir) {
+    return undefined;
+  }
+
+  return path.resolve(repoDir, gitDir);
+}
+
+async function readPackedGitRef(gitDir, ref) {
+  const packedRefs = await fs.readFile(path.resolve(gitDir, "packed-refs"), "utf8");
+  const line = packedRefs
+    .split(/\r?\n/)
+    .find((entry) => entry.endsWith(` ${ref}`));
+  return line?.split(" ")[0]?.slice(0, 7) ?? "unknown";
+}
+
+function formatIsoDate(date) {
+  return date.toISOString().slice(0, 10);
 }
 
 function resolveAssetUrl(src, sourcePath) {

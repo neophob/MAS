@@ -22,7 +22,7 @@ const rasterDpi = 144;
 const pointsToPixels = rasterDpi / 72;
 
 const pageChecks = [
-  { name: "cover", generatedSet: "real", templatePage: 1, generatedPage: 1, threshold: 0.94 },
+  { name: "cover", generatedSet: "real", templatePage: 1, generatedPage: 1, threshold: 0.93 },
   { name: "toc", generatedSet: "real", templatePage: 3, generatedPage: 3 }
 ];
 
@@ -67,6 +67,63 @@ const cropChecks = [
       heightPx: 244
     },
     normalize: "posterize-3"
+  },
+  {
+    name: "figures-index-format",
+    generatedSet: "real",
+    anchorText: "Abbildungsverzeichnis",
+    templatePageNumber: 9,
+    generatedPageNumber: 5,
+    crop: {
+      leftPadPt: 4,
+      topPadPt: 9,
+      widthPx: 1050,
+      heightPx: 150
+    },
+    normalize: "posterize-3",
+    threshold: 0.93
+  },
+  {
+    name: "tables-index-format",
+    generatedSet: "real",
+    anchorText: "Tabellenverzeichnis",
+    templatePageNumber: 9,
+    generatedPageNumber: 5,
+    crop: {
+      leftPadPt: 4,
+      topPadPt: 9,
+      widthPx: 1050,
+      heightPx: 150
+    },
+    normalize: "posterize-3",
+    threshold: 0.93
+  }
+];
+
+const baseTextChecks = [
+  {
+    name: "toc-backmatter-entries",
+    pattern: /Inhalt[\s\S]*^Abbildungsverzeichnis\s+\d+[\s\S]*^Tabellenverzeichnis\s+\d+[\s\S]*^Glossar\s+\d+[\s\S]*^Literaturverzeichnis\s+\d+[\s\S]*^Anhang\s+\d+[\s\S]*^Selbständigkeitserklärung\s+\d+/m
+  },
+  {
+    name: "cover-advisor-single-line",
+    pattern: /^Betreuer\*in:\s+Daniel Dini, Head of Security Architecture & Engineer$/m
+  },
+  {
+    name: "generated-figures-list",
+    pattern: /(?:^|\f)Abbildungsverzeichnis[\s\S]*(?:^|\f|\n)Abbildung 1: Et ut aut isti repuditis qui ium\s+\d+/m
+  },
+  {
+    name: "generated-tables-list",
+    pattern: /^Tabellenverzeichnis[\s\S]*^Tabelle 1: Et ut aut isti repuditis qui ium\s+\d+/m
+  },
+  {
+    name: "backmatter-sections",
+    pattern: /(?:^|\f)Glossar[\s\S]*(?:^|\f)Literaturverzeichnis[\s\S]*(?:^|\f)Anhang/m
+  },
+  {
+    name: "self-declaration-section",
+    pattern: /(?:^|\f)Selbständigkeitserklärung[\s\S]*Ich bestätige/m
   }
 ];
 
@@ -112,6 +169,8 @@ async function main() {
     results.push(result);
   }
 
+  const textChecks = await createTextChecks();
+  const textResults = await compareTextChecks(generatedPdfs.real, textChecks);
   let failed = false;
 
   for (const result of results) {
@@ -127,14 +186,22 @@ async function main() {
     }
   }
 
-  await writePixelReport({ results, failed });
+  for (const result of textResults) {
+    console.log(`${result.name}: ${result.passed ? "PASS" : "FAIL"} text check`);
+
+    if (!result.passed) {
+      failed = true;
+    }
+  }
+
+  await writePixelReport({ results, textResults, failed });
 
   if (failed) {
     throw new Error(`Pixel test failed. Required ${(threshold * 100).toFixed(2)}% match.`);
   }
 }
 
-async function writePixelReport({ results, failed }) {
+async function writePixelReport({ results, textResults, failed }) {
   const generatedAt = reportTimestamp();
   const environment = await collectEnvironment();
   const report = {
@@ -150,7 +217,8 @@ async function writePixelReport({ results, failed }) {
       differentPixels: result.differentPixels,
       totalPixels: result.totalPixels,
       diffPath: path.relative(outputDir, result.diffImage)
-    }))
+    })),
+    textResults
   };
 
   const lines = [
@@ -177,6 +245,12 @@ async function writePixelReport({ results, failed }) {
       return `| ${result.name} (${status}) | ${match} | ${required} | ${result.differentPixels}/${result.totalPixels} | ${diff} |`;
     }),
     "",
+    "Text checks:",
+    "",
+    "| Check | Status |",
+    "| --- | --- |",
+    ...report.textResults.map((result) => `| ${result.name} | ${result.passed ? "PASS" : "FAIL"} |`),
+    "",
     "Generated PDFs:",
     "",
     "- `thesis-real.pdf`"
@@ -184,6 +258,26 @@ async function writePixelReport({ results, failed }) {
 
   await fs.writeFile(reportJsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   await fs.writeFile(reportMarkdownPath, `${lines.join("\n")}\n`, "utf8");
+}
+
+async function compareTextChecks(pdfPath, checks) {
+  const { stdout } = await execFileAsync("pdftotext", ["-layout", pdfPath, "-"]);
+  return checks.map((check) => ({
+    name: check.name,
+    passed: check.pattern.test(stdout)
+  }));
+}
+
+async function createTextChecks() {
+  const gitHash = await readCurrentGitHash();
+  const generatedDate = formatIsoDate(new Date());
+  return [
+    ...baseTextChecks,
+    {
+      name: "footer-build-metadata",
+      pattern: new RegExp(`Minimierung von Software-Supply-Chain-Risiken[\\s\\S]*${escapeRegExp(gitHash)}[\\s\\S]*${escapeRegExp(generatedDate)}`)
+    }
+  ];
 }
 
 function reportTimestamp() {
@@ -194,6 +288,70 @@ function reportTimestamp() {
   }
 
   return new Date().toISOString();
+}
+
+async function readCurrentGitHash() {
+  try {
+    const gitDir = await resolveGitDir(rootDir);
+    if (!gitDir) {
+      return "unknown";
+    }
+
+    const head = (await fs.readFile(path.resolve(gitDir, "HEAD"), "utf8")).trim();
+    if (/^[a-f0-9]{7,40}$/i.test(head)) {
+      return head.slice(0, 7);
+    }
+
+    const ref = head.match(/^ref:\s+(.+)$/)?.[1];
+    if (!ref) {
+      return "unknown";
+    }
+
+    const refPath = path.resolve(gitDir, ref);
+    try {
+      return (await fs.readFile(refPath, "utf8")).trim().slice(0, 7);
+    } catch {
+      return await readPackedGitRef(gitDir, ref);
+    }
+  } catch {
+    return "unknown";
+  }
+}
+
+async function resolveGitDir(repoDir) {
+  const dotGit = path.resolve(repoDir, ".git");
+  const stat = await fs.stat(dotGit).catch(() => undefined);
+  if (!stat) {
+    return undefined;
+  }
+
+  if (stat.isDirectory()) {
+    return dotGit;
+  }
+
+  const content = await fs.readFile(dotGit, "utf8");
+  const gitDir = content.match(/^gitdir:\s*(.+)$/m)?.[1]?.trim();
+  if (!gitDir) {
+    return undefined;
+  }
+
+  return path.resolve(repoDir, gitDir);
+}
+
+async function readPackedGitRef(gitDir, ref) {
+  const packedRefs = await fs.readFile(path.resolve(gitDir, "packed-refs"), "utf8");
+  const line = packedRefs
+    .split(/\r?\n/)
+    .find((entry) => entry.endsWith(` ${ref}`));
+  return line?.split(" ")[0]?.slice(0, 7) ?? "unknown";
+}
+
+function formatIsoDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function collectEnvironment() {

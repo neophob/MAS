@@ -1,4 +1,8 @@
-# Eigenständigkeitserklärung
+---
+role: "declaration"
+---
+
+# Selbständigkeitserklärung
 
 Ich bestätige, dass ich die vorliegende Arbeit selbstständig und ohne Benutzung anderer als der im
 Literaturverzeichnis angegebenen Quellen und Hilfsmittel angefertigt habe. Sämtliche Textstellen, die

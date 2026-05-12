@@ -2,7 +2,7 @@
 
 Ersetze dieses Starter-Dokument durch den echten Bericht. Alle Markdown-Dateien im `doc/`-Verzeichnis werden in alphabetischer Reihenfolge zusammengefuehrt.
 
-![Vorlagenbild aus dem Template](../mdgen/.cache/template-assets/image4.jpeg)
+![Et ut aut isti repuditis qui ium](../mdgen/.cache/template-assets/image4.jpeg)
 
 ## Zielsetzung
 

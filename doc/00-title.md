@@ -1,16 +1,15 @@
 ---
 role: "title"
 set: "real"
-title: "Titel der Thesis"
-subtitle: "Hier steht ein Untertitel"
+title: "Minimierung von Software-Supply-Chain-Risiken"
+subtitle: "Analyse von npm-Angriffen und automatisierte Dependency-Updates"
 thesisType: "Master Thesis"
-degreeProgram: "[Studiengang einfügen]"
-author: "[Autor/en einfügen]"
-advisor: "[Betreuer einfügen]"
-client: "[Auftraggeber einfügen]"
+degreeProgram: "MAS Cyber Security"
+author: "Michael Vogt"
+advisor: "Daniel Dini, Head of Security Architecture & Engineer"
+client: "BKW Management AG"
 expert: "[Experte/n einfügen]"
 date: "2026-05-11"
-thesisLabel: "[Titel der Arbeit, Version, Datum (max. 1 Zeile)]"
 ---
 
 ![Titelbild]({{coverImageUrl}})
