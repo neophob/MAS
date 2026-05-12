@@ -5,7 +5,7 @@ import matter from "gray-matter";
 import MarkdownIt from "markdown-it";
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import puppeteer from "puppeteer";
+import { launchBrowser } from "./browser.mjs";
 import { resolvePdfAnchorPageNumbers } from "./pdf-anchor-page-numbers.mjs";
 import { formatIsoDate, formatSwissDate, readCurrentGitHash, slugify } from "./shared-utils.mjs";
 
@@ -1181,16 +1181,7 @@ function renderDocument({ meta, headings, backmatterTocEntries, coverHtml, abstr
 }
 
 async function renderPdf({ html, pdfPath, footerLabel, stampFooter = true }) {
-  const launchOptions = {
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
-  };
-
-  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-    launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-  }
-
-  const browser = await puppeteer.launch(launchOptions);
+  const browser = await launchBrowser();
 
   try {
     const page = await browser.newPage();

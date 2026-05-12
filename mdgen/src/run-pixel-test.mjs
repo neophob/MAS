@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
+import { smokeTestBrowser } from "./browser.mjs";
 
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 
+await smokeTestBrowser();
 await run(npmCommand, ["run", "clean:output"]);
 await run(npmCommand, ["run", "build"]);
 await run("node", ["src/pixel-test.mjs"]);
