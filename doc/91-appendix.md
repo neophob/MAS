@@ -21,11 +21,19 @@ role: "appendix"
 
 ## Risikofaktoren
 
-1. Zeitliche Belastung durch berufliche Tätigkeit, Masterarbeit und CAS Cyber Threat Intelligence.
-2. Risiko eines zu grossen Untersuchungsumfangs.
-3. Technische Komplexität beim Proof of Concept.
-4. Begrenzte Reproduzierbarkeit AI-assistierter Ansätze.
-5. Begrenzte Verfügbarkeit geeigneter Testapplikationen und Angriffsszenarien.
+1. Zeitliche Belastung durch parallele berufliche Tätigkeit mit 80%-Pensum, Masterarbeit und CAS
+   Cyber Threat Intelligence.
+2. Risiko eines zu grossen Untersuchungsumfangs durch die Kombination von npm-Malware,
+   automatisierten Dependency Updates, AI-assistierten Ansätzen und Supply-Chain-Frameworks.
+3. Technische Komplexität bei Umsetzung und Evaluation des Proof of Concept für automatisierte
+   Dependency-Update-Prozesse.
+4. Technische Unsicherheiten und begrenzte Reproduzierbarkeit bei der Evaluation AI-assistierter
+   Ansätze für Major Dependency Updates.
+5. Begrenzte Verfügbarkeit geeigneter Testapplikationen sowie reproduzierbarer Angriffsszenarien
+   für praktische Analysen und Tests.
+
+Zur Risikominimierung wird der Fokus bei Bedarf auf die Analyse von npm-Supply-Chain-Angriffen
+sowie automatisierte Dependency-Update-Prozesse priorisiert.
 
 ## Ergänzungen aus dem Themenantrag
 
@@ -33,3 +41,8 @@ Die Arbeit basiert primär auf Open-Source-Ansätzen. Kommerzielle Tools wie Wiz
 ergänzend zur Validierung einzelner Ergebnisse verwendet werden. Bei Bedarf wird der Fokus auf die
 Analyse von npm-Supply-Chain-Angriffen sowie automatisierte Dependency-Update-Prozesse
 priorisiert.
+
+Die Arbeit hat direkten Praxisbezug zur Tätigkeit im Bereich Application Security bei BKW,
+insbesondere zur Security-Domäne Secure Software Development. Die Resultate sollen langfristig
+als Grundlage für interne Security Guidelines, Arbeitsanweisungen und Security-Trainings
+verwendet werden können.

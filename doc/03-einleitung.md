@@ -1,34 +1,24 @@
 # Einleitung
 
-TODO: Einleitung knapp halten. Dieses Kapitel soll Kontext, Problem, Ziel, Abgrenzung und Aufbau
-beschreiben, aber noch keine Analyseergebnisse vorwegnehmen.
+Open-Source-Komponenten sind ein wesentlicher Bestandteil moderner Softwareentwicklung. Sie
+ermöglichen kurze Entwicklungszyklen und eine hohe Wiederverwendung, verlagern aber zugleich
+einen Teil der Sicherheits- und Wartungsverantwortung auf externe Maintainer, Paketregistries
+und automatisierte Build- und Publish-Prozesse.
+
+Diese Arbeit untersucht, wie Unternehmen Risiken durch Open-Source-Abhängigkeiten reduzieren
+und gleichzeitig effiziente Update-Prozesse etablieren können. Der Fokus liegt auf dem
+öffentlichen npm-Ökosystem, weil dort eine grosse Anzahl von Paketen, transitiven Dependencies
+und dokumentierten Supply-Chain-Angriffen zusammenkommt.
 
 ![Software-Supply-Chain-Kontext](assets/software-supply-chain.svg)
-
-## Ausgangslage und Motivation
-
-TODO: Kurz beschreiben, warum Open-Source-Abhängigkeiten und npm-Supply-Chain-Risiken für
-Unternehmen relevant sind.
-
-## Problemstellung
-
-TODO: Problem aus dem Themenantrag verdichten: unsichere oder verspätete Updates einerseits,
-Risiko kompromittierter neuer Releases andererseits.
-
-## Ziel der Arbeit
-
-TODO: Ziel der Arbeit in wenigen Sätzen beschreiben.
 
 ## Forschungsfrage
 
 Wie können Unternehmen Sicherheitsrisiken durch Open-Source-Abhängigkeiten minimieren und
 gleichzeitig effiziente, automatisierte Update-Prozesse gewährleisten?
 
-## Abgrenzung
-
-TODO: Scope festhalten: öffentliches npm-Ökosystem; keine vollständige Unternehmensimplementierung,
-kein tiefes Malware Reverse Engineering, keine rechtliche Analyse.
-
 ## Aufbau der Arbeit
 
-TODO: Nach Fertigstellung kurz beschreiben, was die folgenden Kapitel leisten.
+Die folgenden Kapitel behandeln Ausgangslage, Problemstellung, Zielsetzung, Abgrenzung und
+Methodik. Danach folgen Analyse, Proof of Concept, Framework-Einordnung,
+Handlungsempfehlungen und Fazit.

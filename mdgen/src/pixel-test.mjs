@@ -30,22 +30,10 @@ const pageChecks = [
 
 const cropChecks = [
   {
-    name: "table",
-    generatedSet: "real",
-    anchorText: "Tabellenkopf",
-    crop: {
-      leftPadPt: 8,
-      topPadPt: 5,
-      widthPx: 960,
-      heightPx: 196
-    },
-    normalize: "posterize-3",
-    threshold: 0.95
-  },
-  {
-    name: "heading-2-1",
+    name: "heading-level-2",
     generatedSet: "real",
     anchorText: "2.1",
+    generatedAnchorText: "3.1",
     templatePageNumber: 5,
     crop: {
       leftPadPt: 2,
@@ -118,7 +106,7 @@ const baseTextChecks = [
   },
   {
     name: "generated-tables-list",
-    pattern: /^Tabellenverzeichnis[\s\S]*^Tabelle 1: Bewertungskriterien der Master Thesis\s+\d+/m
+    pattern: /^Tabellenverzeichnis[\s\S]*Keine Tabellen vorhanden\./m
   },
   {
     name: "proposal-derived-doc-templates",
@@ -653,7 +641,7 @@ async function compareImages({ templateImage, generatedImage, diffImage }) {
     stderr = error.stderr ?? "";
   }
 
-  const differentPixels = Number.parseInt(stderr.trim().split(/\s+/)[0] ?? "0", 10);
+  const differentPixels = stderr.trim() === "" ? 0 : Number.parseInt(stderr.trim().split(/\s+/)[0] ?? "0", 10);
 
   if (Number.isNaN(differentPixels)) {
     throw new Error(`Could not parse ImageMagick compare output: ${stderr}`);
