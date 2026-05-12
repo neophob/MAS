@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -1399,7 +1400,23 @@ function resolveAssetUrl(src, sourcePath) {
     return src;
   }
 
-  return `file://${path.resolve(path.dirname(sourcePath), src)}`;
+  const assetPath = path.resolve(path.dirname(sourcePath), src);
+  const buffer = readFileSync(assetPath);
+  return `data:${mimeTypeForPath(assetPath)};base64,${buffer.toString("base64")}`;
+}
+
+function mimeTypeForPath(filePath) {
+  const extension = path.extname(filePath).toLowerCase();
+  const mimeTypes = new Map([
+    [".gif", "image/gif"],
+    [".jpeg", "image/jpeg"],
+    [".jpg", "image/jpeg"],
+    [".png", "image/png"],
+    [".svg", "image/svg+xml"],
+    [".webp", "image/webp"]
+  ]);
+
+  return mimeTypes.get(extension) ?? "application/octet-stream";
 }
 
 async function fileToDataUrl(filePath, mimeType) {

@@ -112,6 +112,10 @@ const baseTextChecks = [
     pattern: /(?:^|\f)Abbildungsverzeichnis[\s\S]*(?:^|\f|\n)Abbildung 1: Software-Supply-Chain-Kontext\s+\d+/m
   },
   {
+    name: "rendered-local-svg-image",
+    pattern: /Software Supply Chain Security\s+npm packages, dependency updates, provenance and governance(?=[\s\S]*Package[\s\S]*Registry)(?=[\s\S]*Build and[\s\S]*Update Pipeline)(?=[\s\S]*Enterprise[\s\S]*Applications)[\s\S]*Controls: SBOM/m
+  },
+  {
     name: "generated-tables-list",
     pattern: /^Tabellenverzeichnis[\s\S]*^Tabelle 1: Bewertungskriterien der Master Thesis\s+\d+/m
   },
