@@ -1072,7 +1072,7 @@ function renderDocument({ meta, headings, backmatterTocEntries, coverHtml, abstr
       }
 
       .thesis-body table {
-        width: calc(100% + 1.8mm);
+        width: calc(100% + 0.6mm);
         margin: 0 0 4mm 3mm;
         border-collapse: collapse;
         border-spacing: 0;
@@ -1103,7 +1103,7 @@ function renderDocument({ meta, headings, backmatterTocEntries, coverHtml, abstr
       }
 
       .thesis-body table:has(thead th:empty) {
-        width: calc(100% + 1.8mm);
+        width: calc(100% + 0.6mm);
       }
 
       .thesis-body table:has(thead th:empty) thead tr {

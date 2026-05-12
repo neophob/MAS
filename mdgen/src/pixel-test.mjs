@@ -23,8 +23,8 @@ const rasterDpi = 144;
 const pointsToPixels = rasterDpi / 72;
 
 const pageChecks = [
-  { name: "cover", generatedSet: "real", templatePage: 1, generatedPage: 1, threshold: 0.93 },
-  { name: "toc", generatedSet: "real", templatePage: 3, generatedPage: 3, threshold: 0.90 }
+  { name: "cover", generatedSet: "real", templatePage: 1, generatedPage: 1, maskText: { padPx: 5 } },
+  { name: "toc", generatedSet: "real", templatePage: 3, generatedPage: 3, maskText: { padPx: 3 } }
 ];
 
 const cropChecks = [
@@ -39,7 +39,7 @@ const cropChecks = [
       heightPx: 196
     },
     normalize: "posterize-3",
-    threshold: 0.94
+    threshold: 0.95
   },
   {
     name: "heading-2-1",
@@ -80,7 +80,7 @@ const cropChecks = [
       heightPx: 150
     },
     normalize: "posterize-3",
-    threshold: 0.93
+    threshold: 0.95
   },
   {
     name: "tables-index-format",
@@ -94,7 +94,7 @@ const cropChecks = [
       heightPx: 150
     },
     normalize: "posterize-3",
-    threshold: 0.93
+    threshold: 0.95
   }
 ];
 
@@ -161,8 +161,30 @@ async function main() {
   for (const page of pageChecks) {
     const templateImage = imageForPage(pdfSets.template, page.templatePage);
     const generatedImage = imageForPage(pdfSets[page.generatedSet], page.generatedPage);
+    const templateCompare = page.maskText ? path.resolve(compareDir, `pixel-${page.name}-template-masked.png`) : templateImage;
+    const generatedCompare = page.maskText ? path.resolve(compareDir, `pixel-${page.name}-generated-masked.png`) : generatedImage;
     const diffImage = path.resolve(compareDir, `pixel-${page.name}-diff.png`);
-    const result = await compareImages({ templateImage, generatedImage, diffImage });
+
+    if (page.maskText) {
+      await maskTextOnPage({
+        pdfPath: templatePdf,
+        imagePath: templateImage,
+        pageNumber: page.templatePage,
+        output: templateCompare,
+        label: `template-${page.name}`,
+        padPx: page.maskText.padPx
+      });
+      await maskTextOnPage({
+        pdfPath: generatedPdfs[page.generatedSet],
+        imagePath: generatedImage,
+        pageNumber: page.generatedPage,
+        output: generatedCompare,
+        label: `${page.generatedSet}-${page.name}`,
+        padPx: page.maskText.padPx
+      });
+    }
+
+    const result = await compareImages({ templateImage: templateCompare, generatedImage: generatedCompare, diffImage });
     results.push({ ...page, ...result, diffImage });
   }
 
@@ -567,6 +589,56 @@ async function compareAnchoredCrop({ check, templateSet, generatedSet }) {
 
   const result = await compareImages({ templateImage: templateCompare, generatedImage: generatedCompare, diffImage });
   return { ...check, ...result, diffImage };
+}
+
+async function maskTextOnPage({ pdfPath, imagePath, pageNumber, output, label, padPx }) {
+  const boxes = await wordBoxesForPage(pdfPath, pageNumber, label);
+
+  if (boxes.length === 0) {
+    await fs.copyFile(imagePath, output);
+    return;
+  }
+
+  const { width, height } = await imageSize(imagePath);
+  const drawCommand = boxes
+    .map((box) => {
+      const xMin = Math.max(0, Math.floor(box.xMin * pointsToPixels) - padPx);
+      const yMin = Math.max(0, Math.floor(box.yMin * pointsToPixels) - padPx);
+      const xMax = Math.min(width - 1, Math.ceil(box.xMax * pointsToPixels) + padPx);
+      const yMax = Math.min(height - 1, Math.ceil(box.yMax * pointsToPixels) + padPx);
+      return `rectangle ${xMin},${yMin} ${xMax},${yMax}`;
+    })
+    .join(" ");
+
+  await execFileAsync("magick", [imagePath, "-fill", "white", "-stroke", "white", "-draw", drawCommand, output]);
+}
+
+async function wordBoxesForPage(pdfPath, targetPageNumber, label) {
+  const bboxPath = path.resolve(compareDir, `${label}-text-mask-bbox.html`);
+  await execFileAsync("pdftotext", ["-bbox-layout", pdfPath, bboxPath]);
+  const html = await fs.readFile(bboxPath, "utf8");
+  const boxes = [];
+  let pageNumber = 0;
+
+  for (const line of html.split(/\r?\n/)) {
+    if (line.includes("<page ")) {
+      pageNumber += 1;
+      continue;
+    }
+
+    if (pageNumber !== targetPageNumber || !line.includes("<word ")) {
+      continue;
+    }
+
+    boxes.push({
+      xMin: numberAttribute(line, "xMin"),
+      yMin: numberAttribute(line, "yMin"),
+      xMax: numberAttribute(line, "xMax"),
+      yMax: numberAttribute(line, "yMax")
+    });
+  }
+
+  return boxes;
 }
 
 async function locateWord(pdfPath, text, label, targetPageNumber) {
