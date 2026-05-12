@@ -7,6 +7,7 @@ import MarkdownIt from "markdown-it";
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import puppeteer from "puppeteer";
+import { resolvePdfAnchorPageNumbers } from "./pdf-anchor-page-numbers.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -119,7 +120,6 @@ async function main() {
       return `<section class="chapter-block">${md.render(file.body, { sourcePath: file.path })}</section>`;
     })
     .join("\n");
-  const backmatterTocEntries = createBackmatterTocEntries(headings);
   const coverHtml = renderCover({
     titleFile,
     meta,
@@ -127,6 +127,42 @@ async function main() {
     footerLogoUrl: templateAssets.footerLogo
   });
   const abstractHtml = renderAbstract({ abstractFile, meta });
+  const htmlPath = path.resolve(outputDir, `thesis-${options.target}.html`);
+  const pdfPath = path.resolve(outputDir, `thesis-${options.target}.pdf`);
+  const firstPassPdfPath = path.resolve(outputDir, `.thesis-${options.target}-toc-pass.pdf`);
+  const footerLabel = await buildFooterLabel(meta, generatedAt);
+
+  const firstPassBackmatterTocEntries = createBackmatterTocEntries();
+  const firstPassBackmatterHtml = renderBackmatter({
+    meta,
+    generatedAt,
+    files: backmatterFiles,
+    figures: figureEntries,
+    tables: tableEntries
+  });
+  const firstPassHtml = renderDocument({
+    meta,
+    headings,
+    backmatterTocEntries: firstPassBackmatterTocEntries,
+    coverHtml,
+    abstractHtml,
+    contentHtml,
+    backmatterHtml: firstPassBackmatterHtml,
+    fontAssets
+  });
+
+  await renderPdf({ html: firstPassHtml, pdfPath: firstPassPdfPath, footerLabel, stampFooter: false });
+  const firstPassPageMap = await resolvePdfAnchorPageNumbers(firstPassPdfPath);
+  await fs.rm(firstPassPdfPath, { force: true });
+
+  applyResolvedPageNumbers({
+    headings,
+    figures: figureEntries,
+    tables: tableEntries,
+    pageMap: firstPassPageMap
+  });
+
+  const backmatterTocEntries = createBackmatterTocEntries(firstPassPageMap);
   const backmatterHtml = renderBackmatter({
     meta,
     generatedAt,
@@ -134,9 +170,6 @@ async function main() {
     figures: figureEntries,
     tables: tableEntries
   });
-
-  await writeGeneratedToc({ sourceDir: options.sourceDir, generatedTocFile, headings, backmatterTocEntries });
-
   const html = renderDocument({
     meta,
     headings,
@@ -148,12 +181,16 @@ async function main() {
     fontAssets
   });
 
-  const htmlPath = path.resolve(outputDir, `thesis-${options.target}.html`);
-  const pdfPath = path.resolve(outputDir, `thesis-${options.target}.pdf`);
-  const footerLabel = await buildFooterLabel(meta, generatedAt);
-
   await fs.writeFile(htmlPath, html, "utf8");
   await renderPdf({ html, pdfPath, footerLabel });
+  validateResolvedPageNumbers({
+    headings,
+    figures: figureEntries,
+    tables: tableEntries,
+    backmatterTocEntries,
+    pageMap: await resolvePdfAnchorPageNumbers(pdfPath)
+  });
+  await writeGeneratedToc({ sourceDir: options.sourceDir, generatedTocFile, headings, backmatterTocEntries });
 
   console.log(`Generated ${pdfPath}`);
 }
@@ -459,20 +496,52 @@ function nextNonEmptyLine(lines, startIndex) {
   return undefined;
 }
 
-function createBackmatterTocEntries(headings) {
-  const contentPages = headings
-    .map((item) => Number.parseInt(item.page ?? "4", 10))
-    .filter((page) => Number.isFinite(page));
-  const firstBackmatterPage = Math.max(4, ...contentPages) + 1;
-
+function createBackmatterTocEntries(pageMap = new Map()) {
   return [
-    { text: "Abbildungsverzeichnis", page: String(firstBackmatterPage) },
-    { text: "Tabellenverzeichnis", page: String(firstBackmatterPage) },
-    { text: "Glossar", page: String(firstBackmatterPage) },
-    { text: "Literaturverzeichnis", page: String(firstBackmatterPage + 1) },
-    { text: "Anhang", page: String(firstBackmatterPage + 2) },
-    { text: "Selbständigkeitserklärung", page: String(firstBackmatterPage + 3) }
+    { text: "Abbildungsverzeichnis" },
+    { text: "Tabellenverzeichnis" },
+    { text: "Glossar" },
+    { text: "Literaturverzeichnis" },
+    { text: "Anhang" },
+    { text: "Selbständigkeitserklärung" }
+  ].map((entry) => {
+    const id = slugify(entry.text);
+    return {
+      ...entry,
+      id,
+      page: formatPageNumber(pageMap.get(id))
+    };
+  });
+}
+
+function applyResolvedPageNumbers({ headings, figures, tables, pageMap }) {
+  for (const item of [...headings, ...figures, ...tables]) {
+    item.page = formatPageNumber(pageMap.get(item.id));
+  }
+}
+
+function validateResolvedPageNumbers({ headings, figures, tables, backmatterTocEntries, pageMap }) {
+  const entries = [
+    ...headings.filter((item) => item.level <= 3),
+    ...figures,
+    ...tables,
+    ...backmatterTocEntries
   ];
+
+  for (const entry of entries) {
+    const actualPage = pageMap.get(entry.id);
+    if (!actualPage) {
+      throw new Error(`Could not resolve PDF page number for "${entry.id}".`);
+    }
+
+    if (entry.page !== String(actualPage)) {
+      throw new Error(`Stale page number for "${entry.id}": TOC has ${entry.page}, PDF target is ${actualPage}.`);
+    }
+  }
+}
+
+function formatPageNumber(pageNumber) {
+  return Number.isFinite(pageNumber) ? String(pageNumber) : "4";
 }
 
 async function writeGeneratedToc({ sourceDir, generatedTocFile, headings, backmatterTocEntries }) {
@@ -481,9 +550,9 @@ async function writeGeneratedToc({ sourceDir, generatedTocFile, headings, backma
     .filter((item) => item.level <= 3)
     .map((item) => {
       const indent = "  ".repeat(item.level - 1);
-      return `${indent}- [${item.number} ${item.text}](#${item.id})`;
+      return `${indent}- [${item.number} ${item.text}](#${item.id}) (S. ${item.page})`;
     });
-  const backmatterEntries = backmatterTocEntries.map((item) => `- [${item.text}](#${slugify(item.text)})`);
+  const backmatterEntries = backmatterTocEntries.map((item) => `- [${item.text}](#${item.id}) (S. ${item.page})`);
   const lines = [
     "---",
     'role: "toc"',
@@ -618,7 +687,7 @@ function renderDocument({ meta, headings, backmatterTocEntries, coverHtml, abstr
     })
     .join("\n");
   const backmatterTocHtml = backmatterTocEntries
-    .map((item) => `<li class="toc-backmatter"><a href="#${escapeHtml(slugify(item.text))}"><span class="toc-text">${escapeHtml(item.text)}</span><span class="toc-page-number">${escapeHtml(item.page)}</span></a></li>`)
+    .map((item) => `<li class="toc-backmatter"><a href="#${escapeHtml(item.id)}"><span class="toc-text">${escapeHtml(item.text)}</span><span class="toc-page-number">${escapeHtml(item.page)}</span></a></li>`)
     .join("\n");
   const tocHtml = [contentTocHtml, backmatterTocHtml].filter(Boolean).join("\n");
 
@@ -825,7 +894,7 @@ function renderDocument({ meta, headings, backmatterTocEntries, coverHtml, abstr
 
       .toc a {
         display: grid;
-        grid-template-columns: 6mm 1fr 8mm;
+        grid-template-columns: 10mm 1fr 8mm;
         align-items: baseline;
         height: 4.57mm;
         line-height: 4.57mm;
@@ -855,11 +924,11 @@ function renderDocument({ meta, headings, backmatterTocEntries, coverHtml, abstr
       }
 
       .toc-level-2 {
-        padding-left: 6mm;
+        padding-left: 8mm;
       }
 
       .toc-level-3 {
-        padding-left: 10mm;
+        padding-left: 14mm;
       }
 
       .backmatter-start {
@@ -931,6 +1000,14 @@ function renderDocument({ meta, headings, backmatterTocEntries, coverHtml, abstr
         margin-top: 0;
       }
 
+      .thesis-body h1 {
+        break-before: page;
+      }
+
+      .thesis-body .chapter-block:first-child > h1:first-child {
+        break-before: auto;
+      }
+
       h1, h2, h3, h4 {
         margin: 0 0 4mm;
         break-after: avoid;
@@ -978,7 +1055,7 @@ function renderDocument({ meta, headings, backmatterTocEntries, coverHtml, abstr
       h1::before {
         content: attr(data-number);
         display: inline-block;
-        width: 6mm;
+        width: 9mm;
       }
 
       ul {
@@ -1141,7 +1218,7 @@ function renderDocument({ meta, headings, backmatterTocEntries, coverHtml, abstr
 </html>`;
 }
 
-async function renderPdf({ html, pdfPath, footerLabel }) {
+async function renderPdf({ html, pdfPath, footerLabel, stampFooter = true }) {
   const launchOptions = {
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
@@ -1173,7 +1250,9 @@ async function renderPdf({ html, pdfPath, footerLabel }) {
     await browser.close();
   }
 
-  await stampRunningFooter({ pdfPath, footerLabel });
+  if (stampFooter) {
+    await stampRunningFooter({ pdfPath, footerLabel });
+  }
 }
 
 async function stampRunningFooter({ pdfPath, footerLabel }) {

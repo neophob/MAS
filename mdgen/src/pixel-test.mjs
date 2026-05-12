@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { resolvePdfAnchorPageNumbers } from "./pdf-anchor-page-numbers.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -23,7 +24,7 @@ const pointsToPixels = rasterDpi / 72;
 
 const pageChecks = [
   { name: "cover", generatedSet: "real", templatePage: 1, generatedPage: 1, threshold: 0.93 },
-  { name: "toc", generatedSet: "real", templatePage: 3, generatedPage: 3 }
+  { name: "toc", generatedSet: "real", templatePage: 3, generatedPage: 3, threshold: 0.90 }
 ];
 
 const cropChecks = [
@@ -45,7 +46,6 @@ const cropChecks = [
     generatedSet: "real",
     anchorText: "2.1",
     templatePageNumber: 5,
-    generatedPageNumber: 4,
     crop: {
       leftPadPt: 2,
       topPadPt: 4,
@@ -73,7 +73,6 @@ const cropChecks = [
     generatedSet: "real",
     anchorText: "Abbildungsverzeichnis",
     templatePageNumber: 9,
-    generatedPageNumber: 5,
     crop: {
       leftPadPt: 4,
       topPadPt: 9,
@@ -88,7 +87,6 @@ const cropChecks = [
     generatedSet: "real",
     anchorText: "Tabellenverzeichnis",
     templatePageNumber: 9,
-    generatedPageNumber: 5,
     crop: {
       leftPadPt: 4,
       topPadPt: 9,
@@ -103,7 +101,7 @@ const cropChecks = [
 const baseTextChecks = [
   {
     name: "toc-backmatter-entries",
-    pattern: /Inhalt[\s\S]*^Abbildungsverzeichnis\s+\d+[\s\S]*^Tabellenverzeichnis\s+\d+[\s\S]*^Glossar\s+\d+[\s\S]*^Literaturverzeichnis\s+\d+[\s\S]*^Anhang\s+\d+[\s\S]*^Selbständigkeitserklärung\s+\d+/m
+    pattern: /Inhalt[\s\S]*(?:^|\f)Abbildungsverzeichnis\s+\d+[\s\S]*(?:^|\f)Tabellenverzeichnis\s+\d+[\s\S]*(?:^|\f)Glossar\s+\d+[\s\S]*(?:^|\f)Literaturverzeichnis\s+\d+[\s\S]*(?:^|\f)Anhang\s+\d+[\s\S]*(?:^|\f)Selbständigkeitserklärung\s+\d+/m
   },
   {
     name: "cover-advisor-single-line",
@@ -111,11 +109,15 @@ const baseTextChecks = [
   },
   {
     name: "generated-figures-list",
-    pattern: /(?:^|\f)Abbildungsverzeichnis[\s\S]*(?:^|\f|\n)Abbildung 1: Et ut aut isti repuditis qui ium\s+\d+/m
+    pattern: /(?:^|\f)Abbildungsverzeichnis[\s\S]*(?:^|\f|\n)Abbildung 1: Software-Supply-Chain-Kontext\s+\d+/m
   },
   {
     name: "generated-tables-list",
-    pattern: /^Tabellenverzeichnis[\s\S]*^Tabelle 1: Et ut aut isti repuditis qui ium\s+\d+/m
+    pattern: /^Tabellenverzeichnis[\s\S]*^Tabelle 1: Bewertungskriterien der Master Thesis\s+\d+/m
+  },
+  {
+    name: "proposal-derived-doc-templates",
+    pattern: /Problemstellung und Zielsetzung[\s\S]*Renovate[\s\S]*AI-\s*assistierte[\s\S]*SLSA[\s\S]*S2C2F/m
   },
   {
     name: "backmatter-sections",
@@ -262,10 +264,15 @@ async function writePixelReport({ results, textResults, failed }) {
 
 async function compareTextChecks(pdfPath, checks) {
   const { stdout } = await execFileAsync("pdftotext", ["-layout", pdfPath, "-"]);
-  return checks.map((check) => ({
+  const regexResults = checks.map((check) => ({
     name: check.name,
     passed: check.pattern.test(stdout)
   }));
+
+  return [
+    ...regexResults,
+    await compareResolvedTocPageNumbers(pdfPath, stdout)
+  ];
 }
 
 async function createTextChecks() {
@@ -365,6 +372,96 @@ function formatSwissDate(date) {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function compareResolvedTocPageNumbers(pdfPath, text) {
+  const destinationPages = await resolvePdfAnchorPageNumbers(pdfPath);
+  const pages = text.split("\f");
+  const tocStartIndex = pages.findIndex((page) => /^Inhalt\s*$/m.test(page));
+  const firstContentPage = destinationPages.get("1-einleitung");
+  const backmatterTitles = new Set([
+    "Abbildungsverzeichnis",
+    "Tabellenverzeichnis",
+    "Glossar",
+    "Literaturverzeichnis",
+    "Anhang",
+    "Selbständigkeitserklärung"
+  ]);
+
+  if (tocStartIndex < 0 || !firstContentPage) {
+    return {
+      name: "toc-page-numbers-resolved",
+      passed: false,
+      details: "Could not locate TOC or first content destination."
+    };
+  }
+
+  const tocText = pages.slice(tocStartIndex, firstContentPage - 1).join("\n");
+  const mismatches = [];
+  let checked = 0;
+
+  for (const line of tocText.split(/\r?\n/)) {
+    const numberedEntry = line.match(/^\s*(\d+(?:\.\d+)*)\s+(.+?)\s+(\d+)\s*$/);
+    if (numberedEntry) {
+      const [, number, rawText, rawPage] = numberedEntry;
+      const id = slugify(`${number}-${normalizeInlineText(rawText)}`);
+      checked += 1;
+      collectPageMismatch({ destinationPages, mismatches, id, expectedPage: rawPage });
+      continue;
+    }
+
+    const backmatterEntry = line.match(/^\s*(.+?)\s+(\d+)\s*$/);
+    if (!backmatterEntry) {
+      continue;
+    }
+
+    const [, rawText, rawPage] = backmatterEntry;
+    const text = normalizeInlineText(rawText);
+    if (!backmatterTitles.has(text)) {
+      continue;
+    }
+
+    checked += 1;
+    collectPageMismatch({
+      destinationPages,
+      mismatches,
+      id: slugify(text),
+      expectedPage: rawPage
+    });
+  }
+
+  return {
+    name: "toc-page-numbers-resolved",
+    passed: checked > 0 && mismatches.length === 0,
+    details: mismatches.slice(0, 5).join("; ") || `${checked} TOC entries checked`
+  };
+}
+
+function collectPageMismatch({ destinationPages, mismatches, id, expectedPage }) {
+  const actualPage = destinationPages.get(id);
+
+  if (!actualPage) {
+    mismatches.push(`${id}: missing destination`);
+    return;
+  }
+
+  if (String(actualPage) !== String(expectedPage)) {
+    mismatches.push(`${id}: TOC ${expectedPage}, destination ${actualPage}`);
+  }
+}
+
+function normalizeInlineText(value) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function slugify(value) {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
 }
 
 async function collectEnvironment() {

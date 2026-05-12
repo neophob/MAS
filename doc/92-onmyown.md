@@ -1,6 +1,7 @@
 ---
 role: "declaration"
 declarationPlace: "Bern"
+signatureName: "Michael Vogt"
 ---
 
 # Selbständigkeitserklärung

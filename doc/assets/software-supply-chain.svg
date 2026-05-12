@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="420" viewBox="0 0 960 420" role="img" aria-labelledby="title desc">
+  <title id="title">Software Supply Chain Kontext</title>
+  <desc id="desc">Vereinfachtes Diagramm von Paketquellen ueber Build Pipeline zu Anwendungen.</desc>
+  <rect width="960" height="420" fill="#f6f7f8"/>
+  <rect x="48" y="52" width="864" height="316" fill="#ffffff" stroke="#d0d0d0" stroke-width="2"/>
+  <g font-family="Lucida Sans, Arial, sans-serif" fill="#111111">
+    <text x="72" y="96" font-size="30">Software Supply Chain Security</text>
+    <text x="72" y="128" font-size="18" fill="#64849b">npm packages, dependency updates, provenance and governance</text>
+  </g>
+  <g font-family="Lucida Sans, Arial, sans-serif" font-size="18" text-anchor="middle">
+    <rect x="80" y="188" width="180" height="80" rx="8" fill="#fac300" stroke="#d9a800" stroke-width="2"/>
+    <text x="170" y="222">Package</text>
+    <text x="170" y="248">Registry</text>
+    <rect x="390" y="188" width="180" height="80" rx="8" fill="#e6e6e6" stroke="#a6a6a6" stroke-width="2"/>
+    <text x="480" y="222">Build and</text>
+    <text x="480" y="248">Update Pipeline</text>
+    <rect x="700" y="188" width="180" height="80" rx="8" fill="#64849b" stroke="#4d6a80" stroke-width="2"/>
+    <text x="790" y="222" fill="#ffffff">Enterprise</text>
+    <text x="790" y="248" fill="#ffffff">Applications</text>
+  </g>
+  <g stroke="#64849b" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M270 228h100"/>
+    <path d="M355 213l20 15-20 15"/>
+    <path d="M580 228h100"/>
+    <path d="M665 213l20 15-20 15"/>
+  </g>
+  <g font-family="Lucida Sans, Arial, sans-serif" font-size="15" fill="#111111">
+    <text x="104" y="318">Risks: malicious packages, vulnerable releases, compromised maintainers</text>
+    <text x="104" y="344">Controls: SBOM, Renovate, CI checks, SLSA, S2C2F, review policies</text>
+  </g>
+</svg>
