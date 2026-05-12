@@ -3,7 +3,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { resolvePdfAnchorPageNumbers } from "./pdf-anchor-page-numbers.mjs";
-import { formatIsoDate, formatSwissDate, readCurrentGitHash, slugify } from "./shared-utils.mjs";
+import { formatIsoDate, formatSwissDate, readCurrentGitHash, slugify, thesisPdfFilename } from "./shared-utils.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -16,8 +16,9 @@ const compareDir = path.resolve(mdgenDir, "output", "compare");
 const reportJsonPath = path.resolve(outputDir, "pixel-report.json");
 const reportMarkdownPath = path.resolve(outputDir, "pixel-report.md");
 const templatePdf = path.resolve(rootDir, "template", "Thesisvorlage mit Titelbild1.0.pdf");
+const currentGitHash = await readCurrentGitHash(rootDir);
 const generatedPdfs = {
-  real: path.resolve(mdgenDir, "output", "thesis-real.pdf")
+  real: path.resolve(mdgenDir, "output", thesisPdfFilename("real", currentGitHash))
 };
 const threshold = Number.parseFloat(process.env.PIXEL_THRESHOLD ?? "0.95");
 const rasterDpi = 144;
@@ -270,7 +271,7 @@ async function writePixelReport({ results, textResults, failed }) {
     "",
     "Generated PDFs:",
     "",
-    "- `thesis-real.pdf`"
+    `- \`${path.basename(generatedPdfs.real)}\``
   ];
 
   await fs.writeFile(reportJsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");

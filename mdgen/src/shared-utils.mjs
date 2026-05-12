@@ -50,6 +50,12 @@ export function slugify(value) {
     .replace(/-{2,}/g, "-");
 }
 
+export function thesisPdfFilename(target, gitHash) {
+  const safeTarget = slugify(target || "real") || "real";
+  const safeHash = /^[a-f0-9]{7,40}$/i.test(gitHash) ? gitHash.slice(0, 7) : "unknown";
+  return `thesis-${safeTarget}-${safeHash}.pdf`;
+}
+
 async function resolveGitDir(repoDir) {
   const dotGit = path.resolve(repoDir, ".git");
   const stat = await fs.stat(dotGit).catch(() => undefined);

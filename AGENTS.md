@@ -16,7 +16,7 @@ npm run build
 
 Output files:
 
-- `mdgen/output/thesis-real.pdf`
+- `mdgen/output/thesis-real-<git-hash>.pdf`
 
 ## Validate
 

@@ -36,7 +36,9 @@ The generator reads authored Markdown files from `doc/` in filename order. Filen
 
 The declaration template can use `{{declarationPlace}}`, `{{declarationDate}}`, and `{{signatureName}}`. `declarationDate` is the current UTC generation date formatted as `DD.MM.YYYY`; `signatureName` defaults to the thesis author.
 
-The pixel test first deletes `mdgen/output`, then rebuilds `mdgen/output/thesis-real.pdf`, rasterizes the reference and generated PDF, and fails if any checked page or component crop is below its required match ratio. It masks dynamic text on full-page cover/TOC comparisons, then checks layout, graphics, lines, spacing, and dedicated crops for the Markdown table, the `2.1` heading size, and the cover `Datum:` to footer area. It also asserts the TOC backmatter marker, generated figure/table indexes, unnumbered backmatter sections, and footer build metadata via PDF text extraction. Component crops normalize font anti-aliasing where needed so layout, spacing, color, and grid regressions remain visible. Override the default threshold with `PIXEL_THRESHOLD`, for example:
+The generator writes the real report as `mdgen/output/thesis-real-<git-hash>.pdf`, for example `thesis-real-a1b2c3d.pdf`, so local builds can keep multiple commit versions side by side.
+
+The pixel test first deletes `mdgen/output`, then rebuilds `mdgen/output/thesis-real-<git-hash>.pdf`, rasterizes the reference and generated PDF, and fails if any checked page or component crop is below its required match ratio. It masks dynamic text on full-page cover/TOC comparisons, then checks layout, graphics, lines, spacing, and dedicated crops for the heading size and the cover `Datum:` to footer area. It also asserts the TOC backmatter marker, generated figure/table indexes, unnumbered backmatter sections, and footer build metadata via PDF text extraction. Component crops normalize font anti-aliasing where needed so layout, spacing, color, and grid regressions remain visible. Override the default threshold with `PIXEL_THRESHOLD`, for example:
 
 ```bash
 PIXEL_THRESHOLD=0.97 npm run test:pixel
@@ -55,7 +57,7 @@ GitHub Actions writes the pixel score table directly into the workflow summary a
 
 | Artifact | Contains |
 | --- | --- |
-| `generated-pdf` | `thesis-real.pdf` |
+| `generated-pdf` | `thesis-real-<git-hash>.pdf` |
 | `mdgen-pixel-assets` | Rasterized pages, crop images, diff images, bbox debug HTML |
 
 Open the workflow run in GitHub Actions and download the PDF from the run page's **Artifacts** section. GitHub Actions artifacts are packaged by GitHub; the workflow uploads only the single PDF with compression disabled.

@@ -7,7 +7,7 @@ import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { launchBrowser } from "./browser.mjs";
 import { resolvePdfAnchorPageNumbers } from "./pdf-anchor-page-numbers.mjs";
-import { formatIsoDate, formatSwissDate, readCurrentGitHash, slugify } from "./shared-utils.mjs";
+import { formatIsoDate, formatSwissDate, readCurrentGitHash, slugify, thesisPdfFilename } from "./shared-utils.mjs";
 
 const rootDir = process.env.MDGEN_WORKSPACE
   ? path.resolve(process.env.MDGEN_WORKSPACE)
@@ -116,10 +116,13 @@ async function main() {
     .join("\n");
   const coverHtml = renderCover({ titleFile, meta });
   const abstractHtml = renderAbstract({ abstractFile, meta });
-  const pdfPath = path.resolve(outputDir, `thesis-${options.target}.pdf`);
+  const gitHash = await readCurrentGitHash(rootDir);
+  const pdfPath = path.resolve(outputDir, thesisPdfFilename(options.target, gitHash));
+  const legacyPdfPath = path.resolve(outputDir, `thesis-${options.target}.pdf`);
   const staleHtmlPath = path.resolve(outputDir, `thesis-${options.target}.html`);
   const firstPassPdfPath = path.resolve(outputDir, `.thesis-${options.target}-toc-pass.pdf`);
   const footerLabel = await buildFooterLabel(meta, generatedAt);
+  await fs.rm(legacyPdfPath, { force: true });
   await fs.rm(staleHtmlPath, { force: true });
 
   const firstPassBackmatterTocEntries = createBackmatterTocEntries();
