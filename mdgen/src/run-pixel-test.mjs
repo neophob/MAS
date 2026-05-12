@@ -3,8 +3,7 @@ import { spawn } from "node:child_process";
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 
 await run(npmCommand, ["run", "clean:output"]);
-await run(npmCommand, ["run", "build:real"]);
-await run(npmCommand, ["run", "build:dummy"]);
+await run(npmCommand, ["run", "build"]);
 await run("node", ["src/pixel-test.mjs"]);
 
 function run(command, args) {

@@ -5,8 +5,6 @@
   "type": "module",
   "scripts": {
     "build": "node src/build.mjs",
-    "build:real": "node src/build.mjs --target real",
-    "build:dummy": "node src/build.mjs --target dummy",
     "clean:output": "node src/clean-output.mjs",
     "pixel:image": "bash scripts/build-pixel-image.sh",
     "test:pixel": "bash scripts/test-pixel.sh",

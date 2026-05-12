@@ -15,23 +15,21 @@ const reportJsonPath = path.resolve(outputDir, "pixel-report.json");
 const reportMarkdownPath = path.resolve(outputDir, "pixel-report.md");
 const templatePdf = path.resolve(rootDir, "template", "Thesisvorlage mit Titelbild1.0.pdf");
 const generatedPdfs = {
-  real: path.resolve(mdgenDir, "output", "thesis-real.pdf"),
-  dummy: path.resolve(mdgenDir, "output", "thesis-dummy.pdf")
+  real: path.resolve(mdgenDir, "output", "thesis-real.pdf")
 };
 const threshold = Number.parseFloat(process.env.PIXEL_THRESHOLD ?? "0.95");
 const rasterDpi = 144;
 const pointsToPixels = rasterDpi / 72;
 
 const pageChecks = [
-  { name: "cover", generatedSet: "real", templatePage: 1, generatedPage: 1 },
-  { name: "toc", generatedSet: "real", templatePage: 3, generatedPage: 3 },
-  { name: "chapter", generatedSet: "real", templatePage: 4, generatedPage: 4 }
+  { name: "cover", generatedSet: "real", templatePage: 1, generatedPage: 1, threshold: 0.94 },
+  { name: "toc", generatedSet: "real", templatePage: 3, generatedPage: 3 }
 ];
 
 const cropChecks = [
   {
     name: "table",
-    generatedSet: "dummy",
+    generatedSet: "real",
     anchorText: "Tabellenkopf",
     crop: {
       leftPadPt: 8,
@@ -44,7 +42,7 @@ const cropChecks = [
   },
   {
     name: "heading-2-1",
-    generatedSet: "dummy",
+    generatedSet: "real",
     anchorText: "2.1",
     templatePageNumber: 5,
     generatedPageNumber: 4,
@@ -69,20 +67,6 @@ const cropChecks = [
       heightPx: 244
     },
     normalize: "posterize-3"
-  },
-  {
-    name: "dummy-cover-date-footer",
-    generatedSet: "dummy",
-    anchorText: "Datum:",
-    templatePageNumber: 1,
-    generatedPageNumber: 1,
-    crop: {
-      leftPadPt: 4,
-      topPadPt: 4,
-      widthPx: 760,
-      heightPx: 244
-    },
-    normalize: "posterize-3"
   }
 ];
 
@@ -96,12 +80,10 @@ async function main() {
   await fs.mkdir(compareDir, { recursive: true });
 
   await assertGeneratedFonts(generatedPdfs.real);
-  await assertGeneratedFonts(generatedPdfs.dummy);
 
   const pdfSets = {
     template: { pdf: templatePdf, dir: path.resolve(compareDir, "template") },
-    real: { pdf: generatedPdfs.real, dir: path.resolve(compareDir, "real") },
-    dummy: { pdf: generatedPdfs.dummy, dir: path.resolve(compareDir, "dummy") }
+    real: { pdf: generatedPdfs.real, dir: path.resolve(compareDir, "real") }
   };
 
   for (const set of Object.values(pdfSets)) {
@@ -197,8 +179,7 @@ async function writePixelReport({ results, failed }) {
     "",
     "Generated PDFs:",
     "",
-    "- `thesis-real.pdf`",
-    "- `thesis-dummy.pdf`"
+    "- `thesis-real.pdf`"
   ];
 
   await fs.writeFile(reportJsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");

@@ -3,13 +3,7 @@
 Generate the real report:
 
 ```bash
-npm run build:real
-```
-
-Generate the dummy report:
-
-```bash
-npm run build:dummy
+npm run build
 ```
 
 Run the pixel comparison against `template/Thesisvorlage mit Titelbild1.0.pdf`:
@@ -30,7 +24,9 @@ The pixel-test image is rebuilt with `--pull --no-cache` by default so local run
 
 The container run also fixes `TZ=UTC`, `LANG=C.UTF-8`, `LC_ALL=C.UTF-8`, and `SOURCE_DATE_EPOCH=315532800` by default. Override the timestamp only via `MDGEN_SOURCE_DATE_EPOCH` if you intentionally want a different deterministic report timestamp.
 
-The pixel test first deletes `mdgen/output`, then rebuilds `mdgen/output/thesis-real.pdf` and `mdgen/output/thesis-dummy.pdf`, rasterizes the reference and generated PDFs, and fails if any checked page or component crop is below its required match ratio. It checks full pages plus dedicated crops for the Markdown table, the `2.1` heading size, and the cover `Datum:` to footer area. Component crops normalize font anti-aliasing where needed so layout, spacing, color, and grid regressions remain visible. Override the default threshold with `PIXEL_THRESHOLD`, for example:
+The generator reads authored Markdown files from `doc/` in filename order. Filenames are not semantic: special handling is controlled only by frontmatter, for example `role: "title"` for the cover page and `role: "abstract"` for the abstract page. The title page structure lives in the `role: "title"` Markdown body and can use placeholders like `{{title}}`, `{{author}}`, `{{date}}`, `{{coverImageUrl}}`, and `{{footerLogoUrl}}`. Files without a role are normal thesis body chapters. Generated files are ignored as input; the generated TOC is identified by `role: "toc"` plus `generated: true` and rewritten during each build. If no generated TOC file exists yet, `doc/02-toc.md` is created.
+
+The pixel test first deletes `mdgen/output`, then rebuilds `mdgen/output/thesis-real.pdf`, rasterizes the reference and generated PDF, and fails if any checked page or component crop is below its required match ratio. It checks stable full pages plus dedicated crops for the Markdown table, the `2.1` heading size, and the cover `Datum:` to footer area. Component crops normalize font anti-aliasing where needed so layout, spacing, color, and grid regressions remain visible. Override the default threshold with `PIXEL_THRESHOLD`, for example:
 
 ```bash
 PIXEL_THRESHOLD=0.97 npm run test:pixel
@@ -49,7 +45,7 @@ GitHub Actions uploads these artifacts after every run:
 
 | Artifact | Contains |
 | --- | --- |
-| `mdgen-pdfs` | `thesis-real.pdf` and `thesis-dummy.pdf` |
+| `mdgen-pdfs` | `thesis-real.pdf` |
 | `mdgen-html` | Generated HTML files |
 | `mdgen-pixel-report` | `pixel-report.md` and `pixel-report.json` |
 | `mdgen-pixel-assets` | Rasterized pages, crop images, diff images, bbox debug HTML |
