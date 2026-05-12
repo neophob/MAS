@@ -1,8 +1,6 @@
 import fs from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import matter from "gray-matter";
 import MarkdownIt from "markdown-it";
 import { PDFDocument, rgb } from "pdf-lib";
@@ -10,17 +8,12 @@ import fontkit from "@pdf-lib/fontkit";
 import puppeteer from "puppeteer";
 import { resolvePdfAnchorPageNumbers } from "./pdf-anchor-page-numbers.mjs";
 
-const execFileAsync = promisify(execFile);
-
 const rootDir = process.env.MDGEN_WORKSPACE
   ? path.resolve(process.env.MDGEN_WORKSPACE)
   : path.resolve(import.meta.dirname, "..", "..");
 const mdgenDir = path.resolve(rootDir, "mdgen");
 const defaultDocDir = path.resolve(rootDir, "doc");
-const templateDocx = path.resolve(rootDir, "template", "Thesisvorlage mit Titelbild1.0.docx");
 const outputDir = path.resolve(mdgenDir, "output");
-const cacheDir = path.resolve(mdgenDir, ".cache");
-const templateAssetDir = path.resolve(cacheDir, "template-assets");
 
 const defaultMeta = {
   title: "Titel der Thesis",
@@ -89,7 +82,6 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
 
   await ensureDirectories();
-  const templateAssets = await ensureTemplateAssets();
   const fontAssets = await ensureFontAssets();
 
   const markdownFiles = await getMarkdownFiles(options.sourceDir);
@@ -121,12 +113,7 @@ async function main() {
       return `<section class="chapter-block">${md.render(file.body, { sourcePath: file.path })}</section>`;
     })
     .join("\n");
-  const coverHtml = renderCover({
-    titleFile,
-    meta,
-    coverImageUrl: templateAssets.coverImage,
-    footerLogoUrl: templateAssets.footerLogo
-  });
+  const coverHtml = renderCover({ titleFile, meta });
   const abstractHtml = renderAbstract({ abstractFile, meta });
   const pdfPath = path.resolve(outputDir, `thesis-${options.target}.pdf`);
   const staleHtmlPath = path.resolve(outputDir, `thesis-${options.target}.html`);
@@ -230,30 +217,6 @@ function parseArgs(argv) {
 
 async function ensureDirectories() {
   await fs.mkdir(outputDir, { recursive: true });
-  await fs.mkdir(templateAssetDir, { recursive: true });
-}
-
-async function ensureTemplateAssets() {
-  const required = [
-    { archivePath: "word/media/image1.png", filename: "image1.png" },
-    { archivePath: "word/media/image3.jpg", filename: "image3.jpg" },
-    { archivePath: "word/media/image4.jpeg", filename: "image4.jpeg" }
-  ];
-
-  for (const asset of required) {
-    const targetPath = path.resolve(templateAssetDir, asset.filename);
-    try {
-      await fs.access(targetPath);
-    } catch {
-      await execFileAsync("unzip", ["-oj", templateDocx, asset.archivePath, "-d", templateAssetDir]);
-    }
-  }
-
-  return {
-    coverImage: await fileToDataUrl(path.resolve(templateAssetDir, "image1.png"), "image/png"),
-    footerLogo: await fileToDataUrl(path.resolve(templateAssetDir, "image3.jpg"), "image/jpeg"),
-    sampleImage: await fileToDataUrl(path.resolve(templateAssetDir, "image4.jpeg"), "image/jpeg")
-  };
 }
 
 async function ensureFontAssets() {
@@ -358,16 +321,13 @@ function renderAbstract({ abstractFile, meta }) {
   return md.render(abstractMarkdown, { sourcePath: abstractFile?.path ?? defaultDocDir });
 }
 
-function renderCover({ titleFile, meta, coverImageUrl, footerLogoUrl }) {
+function renderCover({ titleFile, meta }) {
   if (!titleFile?.body) {
     throw new Error('Missing title page Markdown. Add a non-empty file with role: "title".');
   }
 
   const md = createPlainMarkdownRenderer();
-  const templateValues = buildTemplateValues(meta, {
-    coverImageUrl,
-    footerLogoUrl
-  });
+  const templateValues = buildTemplateValues(meta);
   const markdown = replaceTemplateValues(titleFile.body, templateValues);
   return md.render(markdown, { sourcePath: titleFile.path }).trim();
 }

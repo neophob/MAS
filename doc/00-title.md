@@ -12,7 +12,7 @@ expert: "[Experte/n einfügen]"
 date: "2026-05-11"
 ---
 
-![Titelbild]({{coverImageUrl}})
+![Titelbild](assets/title-cover.png)
 
 # {{title}}
 
@@ -28,7 +28,7 @@ date: "2026-05-11"
 | Expert*in: | {{expert}} |
 | Datum: | {{date}} |
 
-![Footerlogo]({{footerLogoUrl}})
+![Footerlogo](assets/title-footer-logo.jpg)
 
 Departement  
 Abteilung
